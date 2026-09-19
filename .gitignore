@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local tool config
+.claude/
+CLAUDE.md
+.mcp.json
+
+# Media and working files
+*.wav
+*.autosave
+*.autosave.json
+*.tmp
+
+# Model caches
+models/
+.cache/
+huggingface/
+
+# Editors
+.vscode/
+.idea/
