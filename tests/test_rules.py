@@ -9,16 +9,17 @@ from subtitler.core.rules.layout import (
     MaxLineLengthRule,
     OrphanLineRule,
 )
-from subtitler.core.rules.profiles import LATIN_DEFAULT
+from subtitler.core.rules.profiles import ENGLISH, HINDI, TAMIL
 from subtitler.core.rules.timing import (
     MaxDurationRule,
     MinDurationRule,
     MinGapRule,
     OverlapRule,
     ReadingSpeedRule,
+    ShortGapRule,
 )
 
-PROFILE = LATIN_DEFAULT
+PROFILE = ENGLISH
 
 
 def cue(start, end, *lines, index=1):
@@ -35,6 +36,7 @@ CASES = [
     (MinDurationRule, GOOD, cue(0.0, 0.3, "Hi"), None),
     (MaxDurationRule, GOOD, cue(0.0, 30.0, "Too long on screen"), None),
     (MinGapRule, GOOD, GOOD, cue(2.01, 3.0, "Next")),
+    (ShortGapRule, GOOD, GOOD, cue(2.25, 3.0, "Next")),
     (ReadingSpeedRule, GOOD, cue(0.0, 1.0, "Far too many characters for one second"), None),
     (OverlapRule, GOOD, GOOD, cue(1.5, 3.0, "Next")),
     (MaxLineLengthRule, GOOD, cue(0.0, 5.0, "x" * 60), None),
@@ -86,3 +88,15 @@ def test_engine_clean_file():
         cue(2.5, 4.5, "Second cue here", index=2),
     ]
     assert RuleEngine().validate(cues, PROFILE) == []
+
+
+def test_profiles_carry_netflix_limits():
+    for profile in [ENGLISH, HINDI, TAMIL]:
+        assert profile.max_chars_per_line == 42
+        assert profile.max_lines == 2
+        assert abs(profile.min_duration - 5 / 6) < 1e-9
+        assert profile.max_duration == 7.0
+        assert abs(profile.min_gap - 2 / 24) < 1e-9
+    assert ENGLISH.max_cps == 20.0
+    assert HINDI.max_cps == TAMIL.max_cps == 22.0
+    assert HINDI.script == "devanagari"

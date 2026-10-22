@@ -1,10 +1,10 @@
 from dataclasses import replace
 
 from subtitler.core.models import Cue, Word
-from subtitler.core.rules.profiles import LATIN_DEFAULT
+from subtitler.core.rules.profiles import ENGLISH
 from subtitler.core.segmentation import segment
 
-PROFILE = LATIN_DEFAULT
+PROFILE = ENGLISH
 
 
 def make_words(sentence, word_length=0.4, gap=0.05, start=0.0):
@@ -38,7 +38,8 @@ def test_cue_timing_follows_words():
     cues = segment(words, [], PROFILE)
     assert len(cues) == 1
     assert cues[0].start == words[0].start
-    assert cues[0].end == words[-1].end
+    # Nothing follows, so the cue lingers after the last word.
+    assert cues[0].end == words[-1].end + PROFILE.linger
     assert cues[0].words == words
 
 
@@ -116,4 +117,14 @@ def test_min_gap_is_applied_between_cues():
     words = make_words("The first sentence ends here. The second one starts right away.", gap=0.02)
     cues = segment(words, [], PROFILE)
     assert len(cues) == 2
-    assert round(cues[1].start - cues[0].end, 6) == PROFILE.min_gap
+    assert abs(cues[1].start - cues[0].end - PROFILE.min_gap) < 1e-9
+
+
+def test_linger_is_cut_short_by_next_word():
+    # Next sentence starts 0.3 s after the first ends: inside the linger time,
+    # so the gap closes to exactly min_gap instead of leaving a short gap.
+    words = make_words("The first sentence ends here.")
+    words += make_words("The second one follows soon.", start=words[-1].end + 0.3)
+    cues = segment(words, [], PROFILE)
+    assert len(cues) == 2
+    assert abs(cues[1].start - cues[0].end - PROFILE.min_gap) < 1e-9

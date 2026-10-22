@@ -13,6 +13,7 @@ from subtitler.core.rules.timing import (
     MinGapRule,
     OverlapRule,
     ReadingSpeedRule,
+    ShortGapRule,
 )
 
 # Adding a rule is one line here.
@@ -20,6 +21,7 @@ DEFAULT_RULES = [
     MinDurationRule,
     MaxDurationRule,
     MinGapRule,
+    ShortGapRule,
     ReadingSpeedRule,
     OverlapRule,
     MaxLineLengthRule,

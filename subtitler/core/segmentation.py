@@ -11,10 +11,10 @@ where cost(i, j) is the cost of a cue holding words[i:j] and K is the
 profile's max_words_per_cue. Following back[] from n to 0 recovers the
 partition. With K fixed the run time is linear in the number of words.
 
-A cue starts with its first word. It ends with its last word, except that
-a cue shorter than min_duration is held into the following silence until it
-reaches min_duration, and every cue ends at least min_gap before the next
-word (see cue_end). "Duration" below means this display duration.
+A cue starts with its first word. It stays on screen for profile.linger
+after its last word, or longer if needed to reach min_duration, but always
+ends at least min_gap before the next word (see cue_end). "Duration" below
+means this display duration.
 
 cost(i, j) is infinite when a hard constraint fails:
   - the cue lasts less than min_duration or more than max_duration
@@ -89,15 +89,16 @@ def cue_end(
 ) -> float:
     """Display end time for a cue holding words[i:j].
 
-    The cue normally ends with its last word. A cue shorter than min_duration
-    is held on screen into the following silence until it reaches
-    min_duration. Either way it stops min_gap before the next word, which is
-    words[j] or, at the end of the list, next_start."""
+    The cue stays up for profile.linger after its last word, and longer if
+    that is needed to reach min_duration. It always stops min_gap before the
+    next word, which is words[j] or, at the end of the list, next_start. When
+    the next word comes within the linger time, this closes the gap to exactly
+    min_gap, which the Netflix timing guide calls chaining."""
     speech_end = words[j - 1].end
     limit = next_start
     if j < len(words):
         limit = words[j].start
-    end = max(speech_end, words[i].start + profile.min_duration)
+    end = max(speech_end + profile.linger, words[i].start + profile.min_duration)
     end = min(end, limit - profile.min_gap)
     if end <= words[i].start:
         return speech_end

@@ -3,7 +3,7 @@ import copy
 import pytest
 
 from subtitler.core.models import Cue, Project
-from subtitler.core.rules.profiles import LATIN_DEFAULT
+from subtitler.core.rules.profiles import ENGLISH
 from subtitler.core.segmentation import segment
 from subtitler.pipeline.asr import sample_words
 from subtitler.ui.commands import (
@@ -15,7 +15,7 @@ from subtitler.ui.commands import (
     SplitCueCommand,
 )
 
-PROFILE = LATIN_DEFAULT
+PROFILE = ENGLISH
 
 
 def make_project():

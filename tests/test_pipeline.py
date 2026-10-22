@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from subtitler.core.models import Word
-from subtitler.core.rules.profiles import LATIN_DEFAULT
+from subtitler.core.rules.profiles import ENGLISH
 from subtitler.pipeline import audio, jobs
 from subtitler.pipeline.asr import FakeASRBackend, FasterWhisperBackend, join_split_words
 
@@ -76,7 +76,7 @@ def fake_extraction(monkeypatch):
 
 
 def test_transcription_job_delivers_result(qtbot, fake_extraction):
-    job = jobs.TranscriptionJob("clip.mp4", FakeASRBackend(), LATIN_DEFAULT)
+    job = jobs.TranscriptionJob("clip.mp4", FakeASRBackend(), ENGLISH)
     progress = []
     job.signals.progress.connect(progress.append)
     manager = jobs.JobManager()
@@ -92,7 +92,7 @@ def test_transcription_job_delivers_result(qtbot, fake_extraction):
 
 
 def test_transcription_job_can_be_cancelled(qtbot, fake_extraction):
-    job = jobs.TranscriptionJob("clip.mp4", FakeASRBackend(delay=0.2), LATIN_DEFAULT)
+    job = jobs.TranscriptionJob("clip.mp4", FakeASRBackend(delay=0.2), ENGLISH)
     progress = []
     job.signals.progress.connect(progress.append)
     finished = []
@@ -110,8 +110,8 @@ def test_transcription_job_can_be_cancelled(qtbot, fake_extraction):
 
 def test_manager_runs_one_job_at_a_time(qtbot, fake_extraction):
     manager = jobs.JobManager()
-    first = jobs.TranscriptionJob("a.mp4", FakeASRBackend(delay=0.05), LATIN_DEFAULT)
-    second = jobs.TranscriptionJob("b.mp4", FakeASRBackend(), LATIN_DEFAULT)
+    first = jobs.TranscriptionJob("a.mp4", FakeASRBackend(delay=0.05), ENGLISH)
+    second = jobs.TranscriptionJob("b.mp4", FakeASRBackend(), ENGLISH)
     with qtbot.waitSignal(first.signals.finished, timeout=10000):
         assert manager.start(first)
         assert not manager.start(second)

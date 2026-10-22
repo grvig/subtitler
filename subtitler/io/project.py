@@ -48,7 +48,7 @@ def project_from_dict(data: dict) -> Project:
         media_path=data.get("media_path"),
         cues=cues,
         shot_boundaries=list(data.get("shot_boundaries", [])),
-        profile=data.get("profile", "latin_default"),
+        profile=data.get("profile", "english"),
     )
 
 

@@ -1,5 +1,5 @@
 from subtitler.core.models import TIME_EPSILON, Cue, Violation
-from subtitler.core.rules.base import ERROR, WARNING, Rule, RuleContext
+from subtitler.core.rules.base import ERROR, INFO, WARNING, Rule, RuleContext
 
 
 class MinDurationRule(Rule):
@@ -35,7 +35,29 @@ class MinGapRule(Rule):
         limit = context.profile.min_gap
         # Negative gaps are overlaps and are reported by OverlapRule instead.
         if 0 <= gap < limit - TIME_EPSILON:
-            return [self.violation(cue, f"Gap to next cue {gap:.3f}s, minimum is {limit}s")]
+            return [self.violation(cue, f"Gap to next cue {gap:.3f}s, minimum is {limit:.3f}s")]
+        return []
+
+
+class ShortGapRule(Rule):
+    """A gap longer than min_gap but shorter than chain_gap reads as a flicker;
+    it should be closed to min_gap or opened up to chain_gap."""
+
+    id = "short-gap"
+    severity = INFO
+
+    def check(self, cue: Cue, context: RuleContext) -> list[Violation]:
+        if context.next is None:
+            return []
+        gap = context.next.start - cue.end
+        low = context.profile.min_gap + TIME_EPSILON
+        high = context.profile.chain_gap - TIME_EPSILON
+        if low < gap < high:
+            message = (
+                f"Gap of {gap:.3f}s: close it to {context.profile.min_gap:.3f}s "
+                f"or widen it to {context.profile.chain_gap}s"
+            )
+            return [self.violation(cue, message)]
         return []
 
 

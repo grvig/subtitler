@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 
 from subtitler.core.models import Project
 from subtitler.core.rules import RuleEngine
-from subtitler.core.rules.profiles import LATIN_DEFAULT, PROFILES
+from subtitler.core.rules.profiles import ENGLISH, PROFILES
 from subtitler.io import project as project_io
 from subtitler.io.srt import read_srt, write_srt
 from subtitler.io.vtt import write_vtt
@@ -55,9 +55,9 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Subtitler")
         self.resize(1400, 900)
-        self.project = Project(profile=LATIN_DEFAULT.name)
+        self.project = Project(profile=ENGLISH.name)
         self.project_path = None
-        self.profile = LATIN_DEFAULT
+        self.profile = ENGLISH
         self.use_fake_asr = use_fake_asr
         self.backends = {}
         self.violations = []

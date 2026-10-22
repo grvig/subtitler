@@ -1,12 +1,12 @@
 from dataclasses import replace
 
 from subtitler.core.linebreak import best_split
-from subtitler.core.rules.profiles import LATIN_DEFAULT
+from subtitler.core.rules.profiles import ENGLISH
 from subtitler.core.text import grapheme_length
 
 
 def profile(max_chars):
-    return replace(LATIN_DEFAULT, max_chars_per_line=max_chars)
+    return replace(ENGLISH, max_chars_per_line=max_chars)
 
 
 def test_short_text_stays_on_one_line():

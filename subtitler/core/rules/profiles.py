@@ -1,16 +1,41 @@
 """Style profiles: the limits a subtitle file is checked and segmented against.
 
-PROVISIONAL NUMBERS. Every threshold in this module is a placeholder picked
-to make development and testing possible. None of them is taken from a
-published style guide. They must be replaced with values from real
-broadcaster or industry guidelines before the output is called compliant.
+Limits marked "Netflix" come from the Netflix Timed Text Style Guides
+(partnerhelp.netflixstudios.com), adult programmes, subtitles rather than SDH:
+
+  General Requirements: 2 lines at most, 5/6 s minimum and 7 s maximum
+      duration per event.
+  Subtitle Timing Guidelines: at least 2 frames between events; gaps should
+      be either 2 frames or at least half a second; an out-time should ideally
+      sit half a second after the audio ends when no subtitle follows.
+  English (USA): 42 characters per line, up to 20 characters per second.
+  Hindi: 42 characters per line, up to 22 characters per second.
+  Tamil: 42 characters per line, up to 22 characters per second.
+
+Frame-based values assume 24 fps. The guides do not say how characters are
+counted for Indic scripts; this project counts grapheme clusters, which is
+the more lenient reading.
+
+Values marked "provisional" are choices made for this project and do not
+come from any guide: the target reading speed the segmenter aims for, the
+comfortable duration, and the cost weights. They are tuning knobs.
 """
 
 from dataclasses import dataclass, field
 
+FRAME = 1 / 24
+
+# Netflix: general requirements and subtitle timing guidelines.
+NETFLIX_MAX_LINES = 2
+NETFLIX_MIN_DURATION = 5 / 6
+NETFLIX_MAX_DURATION = 7.0
+NETFLIX_MIN_GAP = 2 * FRAME
+NETFLIX_CHAIN_GAP = 0.5
+NETFLIX_LINGER = 0.5
+
 
 def default_cost_weights() -> dict[str, float]:
-    # Provisional: relative weights for the segmentation cost terms, not tuned.
+    # Provisional: relative weights for the segmentation cost terms.
     return {
         "cps_excess": 1.0,
         "break_penalty": 1.0,
@@ -29,41 +54,45 @@ class StyleProfile:
     target_cps: float
     max_cps: float
     max_chars_per_line: int
-    max_lines: int
-    min_duration: float
-    max_duration: float
-    min_gap: float
+    max_lines: int = NETFLIX_MAX_LINES
+    min_duration: float = NETFLIX_MIN_DURATION
+    max_duration: float = NETFLIX_MAX_DURATION
+    min_gap: float = NETFLIX_MIN_GAP
+    # Gaps shorter than this but longer than min_gap should be closed.
+    chain_gap: float = NETFLIX_CHAIN_GAP
+    # How long a cue may stay up after its last word ends.
+    linger: float = NETFLIX_LINGER
     max_words_per_cue: int = 20
     comfortable_duration: float = 1.5
     cost_weights: dict[str, float] = field(default_factory=default_cost_weights)
 
 
-# Provisional placeholder values, not sourced from any style guide.
-LATIN_DEFAULT = StyleProfile(
-    name="latin_default",
+ENGLISH = StyleProfile(
+    name="english",
     script="latin",
+    # Provisional target; the Netflix maximum is 20.
     target_cps=15.0,
     max_cps=20.0,
     max_chars_per_line=42,
-    max_lines=2,
-    min_duration=1.0,
-    max_duration=7.0,
-    min_gap=0.08,
-    comfortable_duration=1.5,
 )
 
-# Provisional placeholder values, not sourced from any style guide. Counts are
-# in grapheme clusters, so they are lower than the Latin ones on purpose.
+HINDI = StyleProfile(
+    name="hindi",
+    script="devanagari",
+    # Provisional target; the Netflix maximum is 22.
+    target_cps=17.0,
+    max_cps=22.0,
+    max_chars_per_line=42,
+    comfortable_duration=1.8,
+)
+
 TAMIL = StyleProfile(
     name="tamil",
     script="tamil",
-    target_cps=12.0,
-    max_cps=17.0,
-    max_chars_per_line=36,
-    max_lines=2,
-    min_duration=1.0,
-    max_duration=7.0,
-    min_gap=0.08,
+    # Provisional target; the Netflix maximum is 22.
+    target_cps=17.0,
+    max_cps=22.0,
+    max_chars_per_line=42,
     comfortable_duration=1.8,
 )
 
@@ -74,16 +103,14 @@ PERMISSIVE = StyleProfile(
     target_cps=30.0,
     max_cps=60.0,
     max_chars_per_line=80,
-    max_lines=2,
     min_duration=0.1,
     max_duration=20.0,
     min_gap=0.0,
+    chain_gap=0.0,
+    linger=0.0,
     max_words_per_cue=40,
     comfortable_duration=0.5,
 )
 
-PROFILES = {
-    LATIN_DEFAULT.name: LATIN_DEFAULT,
-    TAMIL.name: TAMIL,
-    PERMISSIVE.name: PERMISSIVE,
-}
+PROFILES = {profile.name: profile for profile in [ENGLISH, HINDI, TAMIL, PERMISSIVE]}
+DEFAULT_PROFILE = ENGLISH

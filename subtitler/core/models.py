@@ -63,5 +63,5 @@ class Project:
     media_path: str | None = None
     cues: list[Cue] = field(default_factory=list)
     shot_boundaries: list[float] = field(default_factory=list)
-    profile: str = "latin_default"
+    profile: str = "english"
     dirty: bool = False
