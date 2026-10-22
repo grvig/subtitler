@@ -32,7 +32,14 @@ from subtitler.io.srt import read_srt, write_srt
 from subtitler.io.vtt import write_vtt
 from subtitler.pipeline.asr import FakeASRBackend, FasterWhisperBackend
 from subtitler.pipeline.audio import ffmpeg_available
-from subtitler.pipeline.jobs import JobManager, RealignJob, ShotDetectionJob, TranscriptionJob
+from subtitler.pipeline.jobs import (
+    BatchJob,
+    JobManager,
+    RealignJob,
+    ShotDetectionJob,
+    TranscriptionJob,
+)
+from subtitler.pipeline.run import find_media
 from subtitler.ui.commands import (
     CommandStack,
     EditTextCommand,
@@ -122,6 +129,7 @@ class MainWindow(QMainWindow):
         self.save_action = self._action("Save Project", self.save_project, "Ctrl+S")
         self.export_srt_action = self._action("Export SRT...", self.export_srt, "Ctrl+E")
         self.export_vtt_action = self._action("Export VTT...", self.export_vtt)
+        self.batch_action = self._action("Batch Transcribe Folder...", self.batch_transcribe)
         self.transcribe_action = self._action("Transcribe", self.transcribe, "Ctrl+T")
         self.resegment_action = self._action("Re-segment", self.resegment, "Ctrl+R")
         self.shots_action = self._action("Detect Shot Changes", self.detect_shots, "Ctrl+D")
@@ -144,6 +152,8 @@ class MainWindow(QMainWindow):
             None,
             self.export_srt_action,
             self.export_vtt_action,
+            None,
+            self.batch_action,
         ]:
             if action is None:
                 file_menu.addSeparator()
@@ -234,6 +244,7 @@ class MainWindow(QMainWindow):
         self.redo_action.setEnabled(self.stack.can_redo() and not busy)
         self.transcribe_action.setEnabled(has_media and not busy and ffmpeg_available())
         self.shots_action.setEnabled(has_media and not busy)
+        self.batch_action.setEnabled(not busy and ffmpeg_available())
         self.realign_action.setEnabled(has_media and bool(cues) and not busy and ffmpeg_available())
         self.resegment_action.setEnabled(bool(cues) and not busy)
         for action in [self.export_srt_action, self.export_vtt_action, self.save_action]:
@@ -435,6 +446,37 @@ class MainWindow(QMainWindow):
         self.status_label.setText(
             f"Realigned {len(command.changes)} cues; re-segmenting now keeps their corrected words"
         )
+
+    def batch_transcribe(self) -> None:
+        if self.jobs.is_busy():
+            return
+        folder = QFileDialog.getExistingDirectory(self, "Batch transcribe folder")
+        if not folder:
+            return
+        paths = find_media(folder)
+        if not paths:
+            QMessageBox.information(self, "Batch transcribe", "No media files in that folder.")
+            return
+        answer = QMessageBox.question(
+            self,
+            "Batch transcribe",
+            f"Transcribe {len(paths)} files with the {self.profile.name} profile, also "
+            "detecting shot changes?\n\nSubtitles are saved as .srt beside each file. "
+            "Files that already have one are skipped.",
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self._start_job(BatchJob(paths, self._backend(), self.profile, True), self._on_batch)
+
+    def _on_batch(self, items) -> None:
+        done = [item for item in items if item.error is None and not item.skipped]
+        skipped = [item for item in items if item.skipped]
+        failed = [item for item in items if item.error is not None]
+        lines = [f"{len(done)} transcribed, {len(skipped)} skipped, {len(failed)} failed."]
+        for item in failed:
+            lines.append(f"{item.media_path.name}: {item.error}")
+        self.status_label.setText(lines[0])
+        QMessageBox.information(self, "Batch transcribe", "\n".join(lines))
 
     def _confirm_replace(self) -> bool:
         answer = QMessageBox.question(

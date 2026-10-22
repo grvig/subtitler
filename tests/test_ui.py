@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from subtitler.core.models import Word
 from subtitler.io.srt import read_srt
-from subtitler.pipeline import jobs
+from subtitler.pipeline import jobs, run
 from subtitler.ui.main_window import MainWindow
 from tests.test_pipeline import write_tone
 
@@ -16,7 +16,7 @@ def window(qtbot, monkeypatch, tmp_path):
     def fake_extract(media_path, out_path, *window):
         write_tone(out_path, seconds=20.0)
 
-    monkeypatch.setattr(jobs, "extract_audio", fake_extract)
+    monkeypatch.setattr(run, "extract_audio", fake_extract)
     monkeypatch.setattr("subtitler.ui.main_window.ffmpeg_available", lambda: True)
     # Answer every confirmation with Yes instead of blocking on a modal dialog.
     monkeypatch.setattr(
@@ -48,7 +48,7 @@ def test_full_editing_flow(qtbot, window, tmp_path, monkeypatch):
     win = window
     # Cancel part way through.
     win.transcribe()
-    qtbot.waitUntil(lambda: win.progress.value() > jobs.EXTRACTION_SHARE, timeout=5000)
+    qtbot.waitUntil(lambda: win.progress.value() > run.EXTRACTION_SHARE, timeout=5000)
     win.cancel_job()
     qtbot.waitUntil(lambda: not win.jobs.is_busy(), timeout=5000)
     assert win.status_label.text() == "Cancelled"
@@ -134,7 +134,7 @@ def test_realign_keeps_corrections_through_resegment(qtbot, window, monkeypatch)
     # The recogniser hears the original words on the cue's audio slice.
     def heard(wav, progress, cancel, prompt):
         cue = win.project.cues[0]
-        offset = max(0.0, cue.start - jobs.ALIGN_PADDING)
+        offset = max(0.0, cue.start - run.ALIGN_PADDING)
         return [Word(w.text, w.start - offset, w.end - offset) for w in cue.words]
 
     monkeypatch.setattr(win._backend(), "transcribe", heard)

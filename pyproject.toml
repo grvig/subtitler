@@ -27,6 +27,7 @@ dev = [
 
 [project.scripts]
 subtitler = "subtitler.app:main"
+subtitler-batch = "subtitler.batch:main"
 
 [tool.setuptools.packages.find]
 include = ["subtitler*"]

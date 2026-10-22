@@ -3,37 +3,19 @@
 A job runs on a QThreadPool worker thread and must never touch a widget.
 Everything it produces goes back to the GUI thread through JobSignals.
 The signals object is created on the GUI thread, so Qt queues each emit
-into the GUI thread's event loop.
+into the GUI thread's event loop. The work itself is done by the plain
+functions in pipeline/run.py.
 """
 
-import tempfile
 import threading
-from dataclasses import dataclass, field
-from pathlib import Path
 
-import numpy as np
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
-from subtitler.core.alignment import align_words
-from subtitler.core.models import Cue, Violation, Word
-from subtitler.core.rules import RuleEngine
+from subtitler.core.models import Cue
 from subtitler.core.rules.profiles import StyleProfile
-from subtitler.core.segmentation import segment
+from subtitler.pipeline import run
 from subtitler.pipeline.asr import ASRBackend
-from subtitler.pipeline.audio import compute_peaks, extract_audio
 from subtitler.pipeline.shots import detect_shots
-
-PEAK_BUCKETS_PER_SECOND = 100
-# Audio taken on each side of a cue when it is transcribed again on its own.
-ALIGN_PADDING = 0.25
-
-# How the progress bar is shared between the stages, in percent.
-EXTRACTION_SHARE = 15
-ASR_SHARE = 70
-
-
-class JobCancelled(Exception):
-    pass
 
 
 class JobSignals(QObject):
@@ -55,36 +37,27 @@ class Job(QRunnable):
     def cancel(self) -> None:
         self.cancel_event.set()
 
-    def check_cancelled(self) -> None:
-        if self.cancel_event.is_set():
-            raise JobCancelled()
-
     def execute(self):
         raise NotImplementedError
 
     def run(self) -> None:
         try:
             result = self.execute()
-            self.check_cancelled()
-        except JobCancelled:
+            if self.cancel_event.is_set():
+                raise run.Cancelled()
+        except run.Cancelled:
             self.signals.cancelled.emit()
         except Exception as error:
             self.signals.failed.emit(f"{type(error).__name__}: {error}")
         else:
             self.signals.finished.emit(result)
 
-
-@dataclass
-class TranscriptionResult:
-    words: list[Word]
-    cues: list[Cue]
-    violations: list[Violation]
-    peaks_min: np.ndarray
-    peaks_max: np.ndarray
-    buckets_per_second: int
-    device: str
-    fallback_reason: str | None = None
-    shot_boundaries: list[float] = field(default_factory=list)
+    def _hooks(self) -> dict:
+        return {
+            "progress": self.signals.progress.emit,
+            "status": self.signals.status.emit,
+            "cancel_event": self.cancel_event,
+        }
 
 
 class TranscriptionJob(Job):
@@ -101,37 +74,9 @@ class TranscriptionJob(Job):
         self.profile = profile
         self.shot_boundaries = list(shot_boundaries or [])
 
-    def _asr_progress(self, percent: float) -> None:
-        self.signals.progress.emit(EXTRACTION_SHARE + int(percent * ASR_SHARE / 100))
-
-    def execute(self) -> TranscriptionResult:
-        with tempfile.TemporaryDirectory(prefix="subtitler-") as work_dir:
-            wav_path = Path(work_dir) / "audio.wav"
-            self.signals.status.emit("Extracting audio")
-            self.signals.progress.emit(0)
-            extract_audio(self.media_path, wav_path)
-            self.check_cancelled()
-            peaks_min, peaks_max = compute_peaks(wav_path, PEAK_BUCKETS_PER_SECOND)
-            self.signals.progress.emit(EXTRACTION_SHARE)
-            self.signals.status.emit("Loading model and transcribing")
-            words = self.backend.transcribe(wav_path, self._asr_progress, self.cancel_event)
-            self.check_cancelled()
-        self.signals.status.emit("Segmenting")
-        self.signals.progress.emit(EXTRACTION_SHARE + ASR_SHARE)
-        cues = segment(words, self.shot_boundaries, self.profile)
-        violations = RuleEngine().validate(cues, self.profile, self.shot_boundaries)
-        self.signals.progress.emit(100)
-        self.signals.status.emit("Done")
-        return TranscriptionResult(
-            words=words,
-            cues=cues,
-            violations=violations,
-            peaks_min=peaks_min,
-            peaks_max=peaks_max,
-            buckets_per_second=PEAK_BUCKETS_PER_SECOND,
-            device=self.backend.device_used,
-            fallback_reason=getattr(self.backend, "fallback_reason", None),
-            shot_boundaries=self.shot_boundaries,
+    def execute(self) -> run.TranscriptionResult:
+        return run.transcribe_media(
+            self.media_path, self.backend, self.profile, self.shot_boundaries, **self._hooks()
         )
 
 
@@ -148,15 +93,12 @@ class ShotDetectionJob(Job):
         cuts = detect_shots(
             self.media_path, lambda p: self.signals.progress.emit(int(p)), self.cancel_event
         )
-        self.check_cancelled()
         self.signals.progress.emit(100)
         return cuts
 
 
 class RealignJob(Job):
-    """Transcribes the audio under each given cue again, with the cue's text as
-    a hint, and works out word timings for that text. The result is a list of
-    (position, original start, words)."""
+    """Gives each cue's text new word timings; see run.realign_cues."""
 
     def __init__(self, media_path, backend: ASRBackend, cues: list[tuple[int, Cue]]):
         super().__init__()
@@ -164,27 +106,24 @@ class RealignJob(Job):
         self.backend = backend
         self.cues = cues
 
-    def execute(self) -> list[tuple[int, float, list[Word]]]:
-        results = []
-        with tempfile.TemporaryDirectory(prefix="subtitler-") as work_dir:
-            wav_path = Path(work_dir) / "cue.wav"
-            for number, (position, cue) in enumerate(self.cues):
-                self.check_cancelled()
-                self.signals.status.emit(f"Realigning cue {cue.index}")
-                offset = max(0.0, cue.start - ALIGN_PADDING)
-                extract_audio(self.media_path, wav_path, offset, cue.end + ALIGN_PADDING - offset)
-                heard = self.backend.transcribe(wav_path, None, self.cancel_event, cue.text())
-                # Back onto the media's clock, and inside the cue.
-                inside = []
-                for word in heard:
-                    start = min(max(word.start + offset, cue.start), cue.end)
-                    end = min(max(word.end + offset, start), cue.end)
-                    inside.append(Word(word.text, start, end, word.confidence))
-                words = align_words(cue.text(), inside, cue.start, cue.end)
-                results.append((position, cue.start, words))
-                self.signals.progress.emit(int(100 * (number + 1) / len(self.cues)))
-        self.signals.status.emit("Done")
-        return results
+    def execute(self):
+        return run.realign_cues(self.media_path, self.backend, self.cues, **self._hooks())
+
+
+class BatchJob(Job):
+    """Transcribes every file in a list and writes subtitles beside each one."""
+
+    def __init__(self, paths, backend: ASRBackend, profile: StyleProfile, find_shots: bool):
+        super().__init__()
+        self.paths = paths
+        self.backend = backend
+        self.profile = profile
+        self.find_shots = find_shots
+
+    def execute(self) -> list[run.BatchItem]:
+        return run.batch_transcribe(
+            self.paths, self.backend, self.profile, find_shots=self.find_shots, **self._hooks()
+        )
 
 
 class JobManager(QObject):
