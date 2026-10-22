@@ -16,7 +16,8 @@ readable:
 
 All of these are weighed together by one dynamic programming pass over the
 words (see `subtitler/core/segmentation.py`), instead of being patched on one
-after another.
+after another. `docs/evaluation.md` compares it with a greedy method of the
+usual kind on two open films with published subtitles.
 
 Text is measured in grapheme clusters, not codepoints, and line breaks come
 from the Unicode line breaking rules rather than splitting on spaces, so
@@ -24,22 +25,34 @@ Tamil and Devanagari text is counted and broken correctly.
 
 ## Status
 
-This is the first part of a semester project. Working now:
+Working:
 
 - transcription with faster-whisper, on the GPU with a CPU fallback
+- shot change detection with PySceneDetect; cue edges snap to the cuts
 - segmentation into cues, and a rule checker that lists problems
 - editor with video, waveform, cue table and problem list
-- undo and redo for text edits, timing changes, split, merge and re-segment
+- undo and redo for text edits, timing changes, split, merge, re-segment
+  and realign
+- realigning corrected text to the audio, so corrections survive re-segmenting
+- batch transcription of a folder, from the menu or the command line
 - SRT import and export, WebVTT export, project files with autosave
+- a packaged Windows build
 
-Not done yet: shot change detection (the segmenter already accepts a list of
-cut times, it is just always empty for now), re-aligning edited text to the
-audio, speaker labels, batch processing and packaging.
+Not done: speaker labels.
 
-**The numbers are placeholders.** The reading speed, line length and duration
-limits in `subtitler/core/rules/profiles.py` and the cost weights were picked
-by hand so the program could be built and tested. They are not taken from any
-broadcaster's style guide yet and need to be replaced with published values.
+### Where the limits come from
+
+The style profiles in `subtitler/core/rules/profiles.py` (English, Hindi,
+Tamil) take their limits from the Netflix Timed Text Style Guides for adult
+programmes: 42 characters per line, two lines, 5/6 s to 7 s on screen, at
+least two frames between subtitles, 20 characters per second for English and
+22 for Hindi and Tamil, and the guide's rules for timing around shot changes.
+The source of each value is written next to it.
+
+Some numbers are this project's own and are marked as such: the reading speed
+the segmenter aims for (below the maximum), and the weights of the cost
+function. The guides also do not say how to count characters in Indic
+scripts; this project counts grapheme clusters.
 
 ## Requirements
 
@@ -100,6 +113,24 @@ Whisper detects the spoken language by itself, and the status bar shows what
 it found. It goes by the audio: a dubbed video is transcribed in the language
 of its dub.
 
+### Speech filter
+
+Before transcribing, a voice activity filter skips audio that does not sound
+like speech. **on** is the default and the safe choice for anything with music
+or sound effects. **lenient** and **off** catch more quiet speech, but over
+music Whisper may then write text that nobody said; see `docs/evaluation.md`.
+
+### Batch transcription
+
+**File > Batch Transcribe Folder** does every media file in a folder and saves
+an `.srt` beside each one. The same from a terminal, with more options:
+
+```bash
+python -m subtitler.batch path\to\folder --profile english --shots --format srt vtt
+```
+
+Files that already have subtitles are skipped unless `--overwrite` is given.
+
 ## Using the editor
 
 | Key | Action |
@@ -109,25 +140,65 @@ of its dub.
 | Ctrl+Return | split the cue at the playhead |
 | Ctrl+M | merge the selected cue with the next one |
 | Ctrl+Z / Ctrl+Y | undo / redo |
+| Ctrl+D | detect shot changes |
+| Ctrl+L | realign edited cues |
 | Ctrl+R | re-segment |
 | Ctrl+E | export SRT |
 
 - Double-click a cue's text to edit it. Separate two lines with `|`.
 - An edited cue is locked (shown in italics). Re-segmenting rebuilds every
   other cue but leaves locked ones exactly as they are.
+- **Realign Edited Cues** listens to each edited cue's audio again and gives
+  the corrected text its own word timings. The cue is then unlocked, and
+  re-segmenting can regroup it without losing the correction. It also gives
+  word timings to imported subtitles, so they can be re-segmented too.
+- **Detect Shot Changes** marks the cuts on the waveform as dashed lines.
+  Re-segment afterwards to fit the cues to them.
 - Drag the edge of a cue in the waveform to change its timing. Click
   elsewhere in the waveform to seek, and scroll to zoom.
 - Double-click a problem in the list on the right to jump to that cue.
+
+## Packaged Windows build
+
+```bash
+pip install pyinstaller
+python packaging/build.py --with-cuda --with-ffmpeg --out C:\builds\subtitler
+```
+
+This makes `dist\Subtitler\Subtitler.exe` in the `--out` folder. With both
+options the folder carries the CUDA libraries and ffmpeg, so the target
+machine needs neither installed. That build is about 3 GB, two thirds of it
+the CUDA libraries; without `--with-cuda` it is under 1 GB. The speech model
+is not included and is downloaded on first use.
+
+## Evaluation
+
+```bash
+python scripts/fetch_eval_media.py
+python -m subtitler.eval %USERPROFILE%\subtitler-eval --language en --sweep 200
+```
+
+The first command downloads two Blender Foundation films with their published
+subtitles. The second scores the reference subtitles, a greedy baseline and
+the optimiser, and tries random cost weights. Results and method are in
+`docs/evaluation.md`.
 
 ## Project layout
 
 ```
 subtitler/
-  core/       models, text measurement, line breaking, segmentation, rules
+  core/       models, text measurement, line breaking, segmentation,
+              realignment, rules
   io/         SRT, WebVTT and project files
-  pipeline/   audio extraction, speech recognition, background jobs
+  pipeline/   audio extraction, speech recognition, shot detection, the
+              processing steps (run.py) and their background jobs
   ui/         Qt widgets and undoable commands
-  app.py      entry point
+  eval/       evaluation metrics, greedy baseline, evaluation runner
+  app.py      editor entry point
+  batch.py    batch command line tool
+scripts/      evaluation media download
+packaging/    PyInstaller build
+docs/         evaluation results
 tests/
 ```
 
@@ -140,8 +211,9 @@ tested with nothing but pytest.
 python -m pytest
 ```
 
-The tests use a fake speech recogniser and generated audio. They need no model
-download, no media file and no ffmpeg.
+The tests use a fake speech recogniser and generated audio, so no model is
+downloaded. A few tests make short clips with ffmpeg and are skipped when it
+is not installed.
 
 Linting and formatting use ruff:
 

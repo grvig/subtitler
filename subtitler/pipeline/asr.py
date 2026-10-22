@@ -6,6 +6,7 @@ swapped, and tests can use FakeASRBackend without downloading a model.
 
 import importlib.util
 import os
+import sys
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -30,12 +31,19 @@ VAD_SETTINGS = {"on": 0.5, "lenient": 0.25, "off": None}
 
 def _register_cuda_libraries() -> None:
     """Make the CUDA DLLs from pip's nvidia-cublas-cu12 and nvidia-cudnn-cu12
-    wheels loadable. They sit in site-packages/nvidia/*/bin, which Windows
-    does not search on its own. Does nothing if the wheels are not installed."""
-    spec = importlib.util.find_spec("nvidia")
-    if spec is None or not hasattr(os, "add_dll_directory"):
+    wheels loadable. They sit in site-packages/nvidia/*/bin, or in nvidia/*/bin
+    inside a packaged build, and Windows does not search there on its own.
+    Does nothing if they are not present."""
+    if not hasattr(os, "add_dll_directory"):
         return
-    for root in spec.submodule_search_locations:
+    roots = []
+    spec = importlib.util.find_spec("nvidia")
+    if spec is not None:
+        roots.extend(spec.submodule_search_locations)
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle is not None:
+        roots.append(str(Path(bundle) / "nvidia"))
+    for root in roots:
         for bin_dir in Path(root).glob("*/bin"):
             os.add_dll_directory(str(bin_dir))
             os.environ["PATH"] = str(bin_dir) + os.pathsep + os.environ["PATH"]

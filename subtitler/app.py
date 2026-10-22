@@ -1,12 +1,24 @@
 """Entry point: python -m subtitler.app [media file] [--fake-asr]"""
 
 import argparse
+import os
 import sys
+from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from subtitler.pipeline.audio import ffmpeg_available
 from subtitler.ui.main_window import MainWindow
+
+
+def _use_bundled_tools() -> None:
+    """A packaged build may carry its own ffmpeg; put it first on PATH."""
+    bundle = getattr(sys, "_MEIPASS", None)
+    if bundle is None:
+        return
+    tools = Path(bundle) / "ffmpeg"
+    if tools.is_dir():
+        os.environ["PATH"] = str(tools) + os.pathsep + os.environ["PATH"]
 
 
 def main() -> int:
@@ -18,6 +30,7 @@ def main() -> int:
         help="use canned words instead of the speech model (for trying the UI)",
     )
     args = parser.parse_args()
+    _use_bundled_tools()
 
     app = QApplication(sys.argv[:1])
     app.setApplicationName("Subtitler")
