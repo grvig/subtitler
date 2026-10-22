@@ -299,6 +299,9 @@ class MainWindow(QMainWindow):
         self.project = project_io.load_project(source)
         self.project.dirty = source != path
         self.project_path = path
+        peaks = project_io.load_peaks(path)
+        if peaks is not None:
+            self.waveform.set_peaks(*peaks)
         if self.project.profile in PROFILES:
             self.profile_combo.setCurrentText(self.project.profile)
         self.stack.clear()
@@ -401,6 +404,10 @@ class MainWindow(QMainWindow):
         self.project.dirty = True
         self.stack.clear()
         self.waveform.set_peaks(result.peaks_min, result.peaks_max, result.buckets_per_second)
+        if self.project_path:
+            project_io.save_peaks(
+                self.project_path, result.peaks_min, result.peaks_max, result.buckets_per_second
+            )
         device = f"Device: {result.device}"
         language = getattr(
             self.backends.get(self.model_combo.currentText()), "detected_language", None

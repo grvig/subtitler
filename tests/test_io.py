@@ -1,5 +1,7 @@
 import os
 
+import numpy as np
+
 from subtitler.core.models import Cue, Project, Word
 from subtitler.io import project as project_io
 from subtitler.io.srt import format_timestamp, parse_srt, read_srt, serialise_srt, write_srt
@@ -102,3 +104,15 @@ def test_recovery_offered_only_when_autosave_is_newer(tmp_path):
     assert project_io.find_recovery(path) is None
     project_io.discard_autosave(path)
     assert not os.path.exists(autosave)
+
+
+def test_peaks_round_trip(tmp_path):
+    path = tmp_path / "demo.subproj"
+    assert project_io.load_peaks(path) is None
+    mins = np.array([-0.5, -0.25], dtype=np.float32)
+    maxs = np.array([0.5, 0.75], dtype=np.float32)
+    project_io.save_peaks(path, mins, maxs, 100)
+    loaded_min, loaded_max, rate = project_io.load_peaks(path)
+    assert loaded_min.tolist() == mins.tolist()
+    assert loaded_max.tolist() == maxs.tolist()
+    assert rate == 100

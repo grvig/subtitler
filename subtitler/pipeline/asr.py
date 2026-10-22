@@ -20,6 +20,7 @@ DEFAULT_MODEL_SIZE = "small"
 GPU_COMPUTE_TYPE = "int8_float16"
 CPU_COMPUTE_TYPE = "int8"
 CPU_THREADS = 8
+HYPHENS = "-‐‑"
 
 
 def _register_cuda_libraries() -> None:
@@ -139,8 +140,29 @@ class FasterWhisperBackend(ASRBackend):
             if progress_callback is not None and info.duration > 0:
                 progress_callback(min(100.0, 100.0 * segment.end / info.duration))
             if cancel_event is not None and cancel_event.is_set():
-                return words
-        return words
+                break
+        return join_split_words(words)
+
+
+def join_split_words(words: list[Word]) -> list[Word]:
+    """Whisper often returns a hyphenated word as two tokens, "Co" and
+    "-Pilot", which would otherwise be shown as "Co -Pilot". Glue a token that
+    starts with a hyphen onto the word before it."""
+    joined = []
+    for word in words:
+        glue = word.text[0] in HYPHENS and len(word.text) > 1 and word.text[1].isalnum()
+        if glue and joined:
+            previous = joined[-1]
+            joined[-1] = Word(
+                previous.text + word.text,
+                previous.start,
+                word.end,
+                min(previous.confidence, word.confidence),
+                previous.speaker,
+            )
+        else:
+            joined.append(word)
+    return joined
 
 
 class FakeASRBackend(ASRBackend):

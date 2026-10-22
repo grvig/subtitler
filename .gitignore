@@ -21,6 +21,8 @@ CLAUDE.md
 *.autosave
 *.autosave.json
 *.tmp
+*.peaks.npz
+*.subproj
 
 # Model caches
 models/

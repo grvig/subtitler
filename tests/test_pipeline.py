@@ -4,9 +4,10 @@ import wave
 import numpy as np
 import pytest
 
+from subtitler.core.models import Word
 from subtitler.core.rules.profiles import LATIN_DEFAULT
 from subtitler.pipeline import audio, jobs
-from subtitler.pipeline.asr import FakeASRBackend, FasterWhisperBackend
+from subtitler.pipeline.asr import FakeASRBackend, FasterWhisperBackend, join_split_words
 
 
 def write_tone(path, seconds=1.0, rate=16000):
@@ -42,6 +43,21 @@ def test_fake_backend_reports_progress_and_cancels():
     cancel = threading.Event()
     cancel.set()
     assert backend.transcribe("unused.wav", None, cancel) == []
+
+
+def test_split_hyphenated_words_are_joined():
+    words = [
+        Word("a", 0.0, 0.2),
+        Word("Co", 0.3, 0.5),
+        Word("-Pilot", 0.5, 0.9, 0.7),
+        Word("long", 1.0, 1.2),
+        Word("-term", 1.2, 1.5),
+        Word("-", 1.6, 1.7),
+        Word("done.", 1.8, 2.0),
+    ]
+    joined = join_split_words(words)
+    assert [w.text for w in joined] == ["a", "Co-Pilot", "long-term", "-", "done."]
+    assert (joined[1].start, joined[1].end, joined[1].confidence) == (0.3, 0.9, 0.7)
 
 
 def test_whisper_backend_does_not_load_on_construction():

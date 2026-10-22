@@ -10,11 +10,14 @@ import json
 import os
 from dataclasses import asdict
 
+import numpy as np
+
 from subtitler.core.models import Cue, Project, Word
 
 FORMAT_VERSION = 1
 AUTOSAVE_INTERVAL_SECONDS = 60
 AUTOSAVE_SUFFIX = ".autosave"
+PEAKS_SUFFIX = ".peaks.npz"
 
 
 def project_to_dict(project: Project) -> dict:
@@ -78,6 +81,28 @@ def find_recovery(path) -> str | None:
     if os.path.exists(path) and os.path.getmtime(path) >= os.path.getmtime(candidate):
         return None
     return candidate
+
+
+def peaks_path(path) -> str:
+    return f"{path}{PEAKS_SUFFIX}"
+
+
+def save_peaks(path, peaks_min: np.ndarray, peaks_max: np.ndarray, buckets_per_second: int) -> None:
+    """Waveform peaks go in a compressed numpy file beside the project; an hour
+    of audio is far too many numbers for the JSON file."""
+    with open(peaks_path(path), "wb") as handle:
+        np.savez_compressed(
+            handle, peaks_min=peaks_min, peaks_max=peaks_max, rate=buckets_per_second
+        )
+
+
+def load_peaks(path):
+    """Return (peaks_min, peaks_max, buckets_per_second), or None if there are none."""
+    candidate = peaks_path(path)
+    if not os.path.exists(candidate):
+        return None
+    with np.load(candidate) as data:
+        return data["peaks_min"], data["peaks_max"], int(data["rate"])
 
 
 def discard_autosave(path) -> None:
