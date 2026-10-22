@@ -96,13 +96,24 @@ def cue_end(
     that is needed to reach min_duration. It always stops min_gap before the
     next word, which is words[j] or, at the end of the list, next_start. When
     the next word comes within the linger time, this closes the gap to exactly
-    min_gap, which the Netflix timing guide calls chaining."""
+    min_gap, which the Netflix timing guide calls chaining. A gap that would
+    fall between min_gap and chain_gap is avoided."""
     speech_end = words[j - 1].end
     limit = next_start
     if j < len(words):
         limit = words[j].start
     end = max(speech_end + profile.linger, words[i].start + profile.min_duration)
     end = min(end, limit - profile.min_gap)
+    # The guide wants a gap of either min_gap or at least chain_gap. If the
+    # linger leaves one in between, end earlier to open a chain_gap, or, if
+    # that would cut the speech or the minimum duration short, close it.
+    gap = limit - end
+    if profile.min_gap + TIME_EPSILON < gap < profile.chain_gap - TIME_EPSILON:
+        earlier = limit - profile.chain_gap
+        if earlier >= speech_end and earlier - words[i].start >= profile.min_duration:
+            end = earlier
+        else:
+            end = limit - profile.min_gap
     if end <= words[i].start:
         return speech_end
     return end

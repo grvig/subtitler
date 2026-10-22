@@ -64,7 +64,7 @@ Speech filter on (the default):
 |---|---|---|---|---|---|---|---|---|---|---|
 | reference | 26 | - | - | - | - | 0% | 0% | 8% | 65% | 7.8 |
 | greedy baseline | 10 | 0.28 | 0.50 | 0.19 | 0.13 | 50% | 50% | 20% | 0% | 17.9 |
-| optimiser | 13 | 0.36 | 0.54 | 0.27 | 0.14 | 0% | 0% | 0% | 8% | 13.3 |
+| optimiser | 13 | 0.36 | 0.54 | 0.27 | 0.14 | 8% | 8% | 0% | 8% | 13.4 |
 
 ### Tears of Steel
 
@@ -72,12 +72,13 @@ Speech filter on (the default):
 |---|---|---|---|---|---|---|---|---|---|---|
 | reference | 76 | - | - | - | - | 14% | 14% | 3% | 30% | 13.3 |
 | greedy baseline | 47 | 0.33 | 0.43 | 0.26 | 0.14 | 28% | 28% | 9% | 0% | 16.2 |
-| optimiser | 58 | 0.36 | 0.41 | 0.32 | 0.13 | 3% | 3% | 0% | 3% | 11.3 |
+| optimiser | 58 | 0.36 | 0.41 | 0.32 | 0.13 | 3% | 3% | 0% | 3% | 11.7 |
 
 On both films the optimiser finds more of the reference boundaries than the
-greedy method, and its output breaks the rules far less often: no cue in
-Sintel and 3 % in Tears of Steel are too fast to read, against 50 % and 28 %
-for the greedy method, and it never ends a line on a function word.
+greedy method, and its output breaks the rules far less often: 8 % of cues in
+Sintel (one cue of 13) and 3 % in Tears of Steel are too fast to read,
+against 50 % and 28 % for the greedy method, and it never ends a line on a
+function word.
 
 Recall is low for every system mostly because of the recogniser, not the
 segmenter: with the filter on, Whisper returns 60 of Sintel's 110 words and
@@ -109,11 +110,11 @@ Tuning was two-fold: the best weights on one film were scored on the other.
 
 | tested on | default F1 | tuned F1 | default errors | tuned errors |
 |---|---|---|---|---|
-| Sintel | 0.36 | 0.36 | 0% | 0% |
-| Tears of Steel | 0.36 | 0.38 | 3% | 5% |
+| Sintel | 0.36 | 0.41 | 8% | 8% |
+| Tears of Steel | 0.36 | 0.35 | 3% | 3% |
 
-Tuning did not produce a gain that carries over between films, and the
-weights chosen on each film were very different from each other. With two
+Tuning helped on one film and slightly hurt on the other, and the weights
+chosen on each film were very different from each other. With two
 films that is noise, so the default weights are kept. The sweep takes about
 16 seconds, so it is cheap to repeat once more reference material is added.
 

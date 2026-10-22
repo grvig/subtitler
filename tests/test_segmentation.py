@@ -128,3 +128,15 @@ def test_linger_is_cut_short_by_next_word():
     cues = segment(words, [], PROFILE)
     assert len(cues) == 2
     assert abs(cues[1].start - cues[0].end - PROFILE.min_gap) < 1e-9
+
+
+def test_no_gap_is_left_between_two_frames_and_half_a_second():
+    # The next line starts 0.8 s after the speech ends: a full 0.5 s linger
+    # would leave a 0.3 s gap, so the cue ends early enough to leave 0.5 s.
+    words = make_words("The first sentence ends here.")
+    words += make_words("The second one follows later.", start=words[-1].end + 0.8)
+    cues = segment(words, [], PROFILE)
+    assert len(cues) == 2
+    gap = cues[1].start - cues[0].end
+    assert abs(gap - PROFILE.chain_gap) < 1e-9
+    assert cues[0].end >= words[4].end
