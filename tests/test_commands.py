@@ -2,7 +2,7 @@ import copy
 
 import pytest
 
-from subtitler.core.models import Cue, Project
+from subtitler.core.models import Cue, Project, Word
 from subtitler.core.rules.profiles import ENGLISH
 from subtitler.core.segmentation import segment
 from subtitler.pipeline.asr import sample_words
@@ -10,6 +10,7 @@ from subtitler.ui.commands import (
     CommandStack,
     EditTextCommand,
     MergeCuesCommand,
+    RealignCommand,
     ResegmentCommand,
     SetTimingCommand,
     SplitCueCommand,
@@ -124,3 +125,20 @@ def test_stack_limit_and_redo_cleared():
     assert not stack.can_redo()
     assert len(calls) == 7
     assert not CommandStack().undo()
+
+
+def test_realign_replaces_words_and_unlocks():
+    project = make_project()
+    stack = CommandStack()
+    stack.execute(EditTextCommand(project, 0, ["Brand new words"]))
+    old_words = project.cues[0].words
+    start = project.cues[0].start
+    new_words = [Word("Brand", start, start + 0.3), Word("new", 0.4, 0.6), Word("words", 0.7, 0.9)]
+    stack.execute(RealignCommand(project, [(0, start, new_words), (1, -1.0, [])]))
+    assert project.cues[0].words == new_words
+    assert not project.cues[0].locked
+    # The second result pointed at a cue that had moved, so it was skipped.
+    assert project.cues[1].words != []
+    stack.undo()
+    assert project.cues[0].words == old_words
+    assert project.cues[0].locked

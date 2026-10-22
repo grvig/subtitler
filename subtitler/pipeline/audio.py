@@ -42,8 +42,16 @@ def _run(command: list[str]) -> str:
     return result.stdout
 
 
-def extract_audio(media_path, out_path) -> None:
-    """Decode the media file's audio to a 16 kHz mono 16-bit WAV file."""
+def extract_audio(
+    media_path, out_path, start: float | None = None, duration: float | None = None
+) -> None:
+    """Decode the media file's audio to a 16 kHz mono 16-bit WAV file. With
+    start and duration, only that stretch of the audio is written."""
+    window = []
+    if start is not None:
+        window = ["-ss", f"{max(0.0, start):.3f}"]
+    if duration is not None:
+        window += ["-t", f"{duration:.3f}"]
     _run(
         [
             "ffmpeg",
@@ -51,6 +59,7 @@ def extract_audio(media_path, out_path) -> None:
             "-hide_banner",
             "-loglevel",
             "error",
+            *window,
             "-i",
             str(media_path),
             "-vn",

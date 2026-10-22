@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
+from subtitler.core.alignment import align_words
 from subtitler.core.models import Cue, Violation, Word
 from subtitler.core.rules import RuleEngine
 from subtitler.core.rules.profiles import StyleProfile
@@ -23,6 +24,8 @@ from subtitler.pipeline.audio import compute_peaks, extract_audio
 from subtitler.pipeline.shots import detect_shots
 
 PEAK_BUCKETS_PER_SECOND = 100
+# Audio taken on each side of a cue when it is transcribed again on its own.
+ALIGN_PADDING = 0.25
 
 # How the progress bar is shared between the stages, in percent.
 EXTRACTION_SHARE = 15
@@ -148,6 +151,40 @@ class ShotDetectionJob(Job):
         self.check_cancelled()
         self.signals.progress.emit(100)
         return cuts
+
+
+class RealignJob(Job):
+    """Transcribes the audio under each given cue again, with the cue's text as
+    a hint, and works out word timings for that text. The result is a list of
+    (position, original start, words)."""
+
+    def __init__(self, media_path, backend: ASRBackend, cues: list[tuple[int, Cue]]):
+        super().__init__()
+        self.media_path = media_path
+        self.backend = backend
+        self.cues = cues
+
+    def execute(self) -> list[tuple[int, float, list[Word]]]:
+        results = []
+        with tempfile.TemporaryDirectory(prefix="subtitler-") as work_dir:
+            wav_path = Path(work_dir) / "cue.wav"
+            for number, (position, cue) in enumerate(self.cues):
+                self.check_cancelled()
+                self.signals.status.emit(f"Realigning cue {cue.index}")
+                offset = max(0.0, cue.start - ALIGN_PADDING)
+                extract_audio(self.media_path, wav_path, offset, cue.end + ALIGN_PADDING - offset)
+                heard = self.backend.transcribe(wav_path, None, self.cancel_event, cue.text())
+                # Back onto the media's clock, and inside the cue.
+                inside = []
+                for word in heard:
+                    start = min(max(word.start + offset, cue.start), cue.end)
+                    end = min(max(word.end + offset, start), cue.end)
+                    inside.append(Word(word.text, start, end, word.confidence))
+                words = align_words(cue.text(), inside, cue.start, cue.end)
+                results.append((position, cue.start, words))
+                self.signals.progress.emit(int(100 * (number + 1) / len(self.cues)))
+        self.signals.status.emit("Done")
+        return results
 
 
 class JobManager(QObject):

@@ -46,9 +46,11 @@ class ASRBackend(ABC):
         audio_path,
         progress_callback: ProgressCallback | None = None,
         cancel_event: threading.Event | None = None,
+        prompt: str | None = None,
     ) -> list[Word]:
         """Return timed words. Progress is reported as a percentage from 0 to
-        100. If cancel_event is set, stop early and return the words so far."""
+        100. If cancel_event is set, stop early and return the words so far.
+        prompt is text the audio is expected to contain, used as a hint."""
 
     @abstractmethod
     def is_available(self) -> bool:
@@ -111,21 +113,24 @@ class FasterWhisperBackend(ASRBackend):
         self.device = "cpu"
         return self._load_cpu()
 
-    def transcribe(self, audio_path, progress_callback=None, cancel_event=None) -> list[Word]:
+    def transcribe(
+        self, audio_path, progress_callback=None, cancel_event=None, prompt=None
+    ) -> list[Word]:
         model = self._load()
         try:
-            return self._run(model, audio_path, progress_callback, cancel_event)
+            return self._run(model, audio_path, progress_callback, cancel_event, prompt)
         except RuntimeError as error:
             # Missing CUDA libraries often only show up once decoding starts.
             if not self.device_used.startswith("cuda"):
                 raise
             model = self._fall_back_to_cpu(error)
-            return self._run(model, audio_path, progress_callback, cancel_event)
+            return self._run(model, audio_path, progress_callback, cancel_event, prompt)
 
-    def _run(self, model, audio_path, progress_callback, cancel_event) -> list[Word]:
+    def _run(self, model, audio_path, progress_callback, cancel_event, prompt) -> list[Word]:
         segments, info = model.transcribe(
             str(audio_path),
             language=self.language,
+            initial_prompt=prompt,
             word_timestamps=True,
             # Skipping silence avoids text being invented over music or noise.
             vad_filter=True,
@@ -180,7 +185,9 @@ class FakeASRBackend(ASRBackend):
     def is_available(self) -> bool:
         return True
 
-    def transcribe(self, audio_path, progress_callback=None, cancel_event=None) -> list[Word]:
+    def transcribe(
+        self, audio_path, progress_callback=None, cancel_event=None, prompt=None
+    ) -> list[Word]:
         result = []
         size = max(1, -(-len(self.words) // self.chunks))
         for start in range(0, len(self.words), size):

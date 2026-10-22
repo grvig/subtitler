@@ -3,6 +3,7 @@ step with them. All background work goes through JobManager; results come
 back as signals and are applied here, on the GUI thread."""
 
 import os
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from subtitler.core.alignment import needs_alignment
 from subtitler.core.models import Project
 from subtitler.core.rules import RuleEngine
 from subtitler.core.rules.profiles import ENGLISH, PROFILES
@@ -30,11 +32,12 @@ from subtitler.io.srt import read_srt, write_srt
 from subtitler.io.vtt import write_vtt
 from subtitler.pipeline.asr import FakeASRBackend, FasterWhisperBackend
 from subtitler.pipeline.audio import ffmpeg_available
-from subtitler.pipeline.jobs import JobManager, ShotDetectionJob, TranscriptionJob
+from subtitler.pipeline.jobs import JobManager, RealignJob, ShotDetectionJob, TranscriptionJob
 from subtitler.ui.commands import (
     CommandStack,
     EditTextCommand,
     MergeCuesCommand,
+    RealignCommand,
     ResegmentCommand,
     SetTimingCommand,
     SplitCueCommand,
@@ -122,6 +125,7 @@ class MainWindow(QMainWindow):
         self.transcribe_action = self._action("Transcribe", self.transcribe, "Ctrl+T")
         self.resegment_action = self._action("Re-segment", self.resegment, "Ctrl+R")
         self.shots_action = self._action("Detect Shot Changes", self.detect_shots, "Ctrl+D")
+        self.realign_action = self._action("Realign Edited Cues", self.realign, "Ctrl+L")
         self.undo_action = self._action("Undo", self.undo, "Ctrl+Z")
         self.redo_action = self._action("Redo", self.redo, "Ctrl+Y")
         self.split_action = self._action("Split at Playhead", self.split_at_playhead, "Ctrl+Return")
@@ -155,6 +159,7 @@ class MainWindow(QMainWindow):
         tools_menu = menus.addMenu("&Subtitles")
         tools_menu.addAction(self.transcribe_action)
         tools_menu.addAction(self.shots_action)
+        tools_menu.addAction(self.realign_action)
         tools_menu.addAction(self.resegment_action)
         playback_menu = menus.addMenu("&Playback")
         playback_menu.addAction(self.play_action)
@@ -229,6 +234,7 @@ class MainWindow(QMainWindow):
         self.redo_action.setEnabled(self.stack.can_redo() and not busy)
         self.transcribe_action.setEnabled(has_media and not busy and ffmpeg_available())
         self.shots_action.setEnabled(has_media and not busy)
+        self.realign_action.setEnabled(has_media and bool(cues) and not busy and ffmpeg_available())
         self.resegment_action.setEnabled(bool(cues) and not busy)
         for action in [self.export_srt_action, self.export_vtt_action, self.save_action]:
             action.setEnabled(bool(cues))
@@ -409,6 +415,26 @@ class MainWindow(QMainWindow):
             message = f"{message}. Re-segment to fit the cues to them."
         self.status_label.setText(message)
         self.refresh()
+
+    def realign(self) -> None:
+        if self.project.media_path is None or self.jobs.is_busy():
+            return
+        targets = []
+        for position, cue in enumerate(self.project.cues):
+            if needs_alignment(cue):
+                targets.append((position, replace(cue)))
+        if not targets:
+            self.status_label.setText("Every cue's words already match its text")
+            return
+        job = RealignJob(self.project.media_path, self._backend(), targets)
+        self._start_job(job, self._on_realigned)
+
+    def _on_realigned(self, results) -> None:
+        command = RealignCommand(self.project, results)
+        self.stack.execute(command)
+        self.status_label.setText(
+            f"Realigned {len(command.changes)} cues; re-segmenting now keeps their corrected words"
+        )
 
     def _confirm_replace(self) -> bool:
         answer = QMessageBox.question(

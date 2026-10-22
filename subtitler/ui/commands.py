@@ -156,6 +156,35 @@ class MergeCuesCommand(Command):
         renumber(self.project.cues)
 
 
+class RealignCommand(Command):
+    """Give cues new word timings for their current text. Once the words match
+    the text the cue no longer needs its lock: re-segmenting will rebuild it
+    from the corrected words."""
+
+    description = "Realign cues"
+
+    def __init__(self, project: Project, results: list[tuple[int, float, list]]):
+        self.project = project
+        self.changes = []
+        for position, start, words in results:
+            # Skip a cue that was moved or removed while it was being realigned.
+            if position < len(project.cues) and project.cues[position].start == start:
+                cue = project.cues[position]
+                self.changes.append((position, cue.words, cue.locked, list(words)))
+
+    def do(self) -> None:
+        for position, _old_words, _old_locked, new_words in self.changes:
+            cue = self.project.cues[position]
+            cue.words = list(new_words)
+            cue.locked = False
+
+    def undo(self) -> None:
+        for position, old_words, old_locked, _new_words in self.changes:
+            cue = self.project.cues[position]
+            cue.words = old_words
+            cue.locked = old_locked
+
+
 class ResegmentCommand(Command):
     """Run the segmenter again over all words, keeping locked cues as they are."""
 

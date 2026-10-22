@@ -4,6 +4,7 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox
 
+from subtitler.core.models import Word
 from subtitler.io.srt import read_srt
 from subtitler.pipeline import jobs
 from subtitler.ui.main_window import MainWindow
@@ -12,7 +13,7 @@ from tests.test_pipeline import write_tone
 
 @pytest.fixture
 def window(qtbot, monkeypatch, tmp_path):
-    def fake_extract(media_path, out_path):
+    def fake_extract(media_path, out_path, *window):
         write_tone(out_path, seconds=20.0)
 
     monkeypatch.setattr(jobs, "extract_audio", fake_extract)
@@ -21,6 +22,12 @@ def window(qtbot, monkeypatch, tmp_path):
     monkeypatch.setattr(
         "subtitler.ui.main_window.QMessageBox.question",
         lambda *args, **kwargs: QMessageBox.StandardButton.Yes,
+    )
+    # A failing job would otherwise block the test on an error dialog.
+    errors = []
+    monkeypatch.setattr(
+        "subtitler.ui.main_window.QMessageBox.critical",
+        lambda parent, title, message: errors.append(message),
     )
     win = MainWindow(use_fake_asr=True)
     qtbot.addWidget(win)
@@ -115,3 +122,28 @@ def test_detect_shots_updates_project(qtbot, window, monkeypatch):
     assert win.project.shot_boundaries == [1.0, 5.0]
     assert win.waveform.shots == [1.0, 5.0]
     assert win.status_label.text() == "Found 2 shot changes"
+
+
+def test_realign_keeps_corrections_through_resegment(qtbot, window, monkeypatch):
+    win = window
+    transcribe(qtbot, win)
+    model = win.table.cue_model
+    model.setData(model.index(0, 5), "Good evening and welcome to our programme.")
+    qtbot.waitUntil(lambda: win.project.cues[0].locked)
+
+    # The recogniser hears the original words on the cue's audio slice.
+    def heard(wav, progress, cancel, prompt):
+        cue = win.project.cues[0]
+        offset = max(0.0, cue.start - jobs.ALIGN_PADDING)
+        return [Word(w.text, w.start - offset, w.end - offset) for w in cue.words]
+
+    monkeypatch.setattr(win._backend(), "transcribe", heard)
+    with qtbot.waitSignal(win.jobs.busy_changed, timeout=10000, check_params_cb=lambda b: not b):
+        win.realign()
+    first = win.project.cues[0]
+    assert not first.locked
+    assert [w.text for w in first.words][-2:] == ["our", "programme."]
+
+    win.resegment()
+    texts = " ".join(cue.text() for cue in win.project.cues)
+    assert "welcome to our programme." in texts
