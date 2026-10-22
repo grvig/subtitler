@@ -23,6 +23,8 @@ CLAUDE.md
 *.tmp
 *.peaks.npz
 *.subproj
+*.words-*.json
+*.shots.json
 
 # Model caches
 models/

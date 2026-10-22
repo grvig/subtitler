@@ -21,6 +21,11 @@ GPU_COMPUTE_TYPE = "int8_float16"
 CPU_COMPUTE_TYPE = "int8"
 CPU_THREADS = 8
 HYPHENS = "-‐‑"
+# Voice activity filter settings: the speech probability above which audio
+# counts as speech, or None to transcribe everything. The library default
+# is 0.5; lower keeps more quiet speech under music, at some risk of text
+# being invented over noise.
+VAD_SETTINGS = {"on": 0.5, "lenient": 0.25, "off": None}
 
 
 def _register_cuda_libraries() -> None:
@@ -64,8 +69,10 @@ class FasterWhisperBackend(ASRBackend):
         device: str = "auto",
         compute_type: str = GPU_COMPUTE_TYPE,
         language: str | None = None,
+        vad: str = "on",
     ):
         self.model_size = model_size
+        self.vad = vad
         self.device = device
         self.compute_type = compute_type
         self.language = language
@@ -126,14 +133,20 @@ class FasterWhisperBackend(ASRBackend):
             model = self._fall_back_to_cpu(error)
             return self._run(model, audio_path, progress_callback, cancel_event, prompt)
 
+    def _vad_options(self) -> dict:
+        # Skipping silence avoids text being invented over music or noise.
+        threshold = VAD_SETTINGS[self.vad]
+        if threshold is None:
+            return {"vad_filter": False}
+        return {"vad_filter": True, "vad_parameters": {"threshold": threshold}}
+
     def _run(self, model, audio_path, progress_callback, cancel_event, prompt) -> list[Word]:
         segments, info = model.transcribe(
             str(audio_path),
             language=self.language,
             initial_prompt=prompt,
             word_timestamps=True,
-            # Skipping silence avoids text being invented over music or noise.
-            vad_filter=True,
+            **self._vad_options(),
         )
         self.detected_language = f"{info.language} ({info.language_probability:.0%})"
         words = []

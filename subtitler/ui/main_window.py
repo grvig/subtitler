@@ -30,7 +30,7 @@ from subtitler.core.rules.profiles import ENGLISH, PROFILES
 from subtitler.io import project as project_io
 from subtitler.io.srt import read_srt, write_srt
 from subtitler.io.vtt import write_vtt
-from subtitler.pipeline.asr import FakeASRBackend, FasterWhisperBackend
+from subtitler.pipeline.asr import VAD_SETTINGS, FakeASRBackend, FasterWhisperBackend
 from subtitler.pipeline.audio import ffmpeg_available
 from subtitler.pipeline.jobs import (
     BatchJob,
@@ -200,6 +200,14 @@ class MainWindow(QMainWindow):
         self.model_combo.addItems(MODEL_SIZES)
         self.model_combo.setToolTip("small fits in 4 GB of VRAM; medium is slower and may not")
         toolbar.addWidget(self.model_combo)
+        toolbar.addWidget(QLabel("  Speech filter: "))
+        self.vad_combo = QComboBox()
+        self.vad_combo.addItems(list(VAD_SETTINGS))
+        self.vad_combo.setToolTip(
+            "on: safest with music and effects. lenient or off: catches more quiet "
+            "speech, but text may be invented over noise."
+        )
+        toolbar.addWidget(self.vad_combo)
 
     def _build_status_bar(self) -> None:
         bar = self.statusBar()
@@ -392,7 +400,9 @@ class MainWindow(QMainWindow):
             return self.backends.setdefault("fake", FakeASRBackend(delay=0.3))
         size = self.model_combo.currentText()
         # One backend per model size, so a loaded model is reused between runs.
-        return self.backends.setdefault(size, FasterWhisperBackend(model_size=size))
+        backend = self.backends.setdefault(size, FasterWhisperBackend(model_size=size))
+        backend.vad = self.vad_combo.currentText()
+        return backend
 
     def transcribe(self) -> None:
         if self.project.media_path is None or self.jobs.is_busy():

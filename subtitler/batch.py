@@ -1,7 +1,8 @@
 """Transcribe every media file in a folder, without the GUI.
 
     python -m subtitler.batch FOLDER [--profile english] [--model small]
-                              [--format srt vtt] [--out DIR] [--shots]
+                              [--vad on|lenient|off] [--format srt vtt]
+                              [--out DIR] [--shots]
                               [--recursive] [--overwrite] [--fake-asr]
 
 Subtitles are written beside each media file (or into --out) with the same
@@ -13,7 +14,7 @@ import argparse
 import sys
 
 from subtitler.core.rules.profiles import PROFILES
-from subtitler.pipeline.asr import FakeASRBackend, FasterWhisperBackend
+from subtitler.pipeline.asr import VAD_SETTINGS, FakeASRBackend, FasterWhisperBackend
 from subtitler.pipeline.audio import ffmpeg_available
 from subtitler.pipeline.run import WRITERS, batch_transcribe, find_media
 
@@ -23,6 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("folder")
     parser.add_argument("--profile", choices=list(PROFILES), default="english")
     parser.add_argument("--model", choices=["small", "medium"], default="small")
+    parser.add_argument("--vad", choices=list(VAD_SETTINGS), default="on", help="speech filter")
     parser.add_argument("--format", nargs="+", choices=list(WRITERS), default=["srt"])
     parser.add_argument("--out", help="folder for the subtitle files")
     parser.add_argument("--shots", action="store_true", help="detect shot changes too")
@@ -41,7 +43,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.fake_asr:
         backend = FakeASRBackend()
     else:
-        backend = FasterWhisperBackend(model_size=args.model)
+        backend = FasterWhisperBackend(model_size=args.model, vad=args.vad)
     print(f"{len(paths)} files, profile {args.profile}, model {args.model}")
 
     items = batch_transcribe(
