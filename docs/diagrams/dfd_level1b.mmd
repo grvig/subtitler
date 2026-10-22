@@ -1,0 +1,16 @@
+flowchart LR
+    editor[/"Subtitle editor"/]
+    p6(("6.0<br/>Edit and<br/>realign"))
+    p4(("4.0<br/>Segment<br/>into cues"))
+    p5(("5.0<br/>Check<br/>rules"))
+    d1[("D1 Project file")]
+    p7(("7.0<br/>Export"))
+    out[/"SRT / WebVTT"/]
+
+    editor -->|text and timing corrections| p6
+    p6 -->|corrected words| p4
+    p4 -->|cues| p5
+    p5 -->|cues, violations| editor
+    p6 -->|cues| d1
+    d1 -->|cues| p7
+    p7 -->|subtitle file| out

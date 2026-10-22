@@ -1,0 +1,48 @@
+flowchart TB
+    user(["Subtitle editor"])
+    cli(["Command line tools<br/>batch · evaluation"])
+
+    subgraph presentation["Presentation layer: subtitler/ui (PySide6)"]
+        direction LR
+        window["Main window<br/>menus · toolbar · shortcuts"]
+        views["Video pane · Waveform<br/>Cue table · Problem list"]
+        commands["Command stack<br/>undo / redo"]
+    end
+
+    subgraph application["Application layer: subtitler/pipeline"]
+        direction LR
+        jobs["Job manager<br/>one background job"]
+        run["Processing steps<br/>transcribe · realign · batch"]
+        adapters["Adapters<br/>audio · ASR · shots"]
+    end
+
+    subgraph domain["Domain layer: subtitler/core (no Qt, no ML libraries)"]
+        direction LR
+        seg["Segmenter<br/>dynamic programming"]
+        lb["Line breaker"]
+        rules["Rule engine<br/>style profiles"]
+        align["Realigner"]
+        text["Text measurement<br/>graphemes · UAX #14"]
+    end
+
+    subgraph storage["Storage layer: subtitler/io"]
+        direction LR
+        srt["SRT · WebVTT"]
+        proj["Project file<br/>autosave · peaks"]
+    end
+
+    subgraph external["External tools and models"]
+        direction LR
+        ffmpeg["ffmpeg · ffprobe"]
+        whisper["faster-whisper<br/>CTranslate2, GPU or CPU"]
+        scene["PySceneDetect<br/>OpenCV"]
+    end
+
+    user --> presentation
+    cli --> application
+    presentation -->|"jobs, results by Qt signal"| application
+    presentation -->|"commands"| domain
+    presentation --> storage
+    application --> domain
+    application --> storage
+    application --> external

@@ -1,0 +1,22 @@
+flowchart LR
+    media[/"Media file"/]
+    d3[("D3 Style profile")]
+    p1(("1.0<br/>Extract<br/>audio"))
+    p2(("2.0<br/>Detect shot<br/>changes"))
+    p3(("3.0<br/>Recognise<br/>speech"))
+    d2[("D2 Waveform<br/>peaks")]
+    p4(("4.0<br/>Segment<br/>into cues"))
+    p5(("5.0<br/>Check<br/>rules"))
+    editor[/"Subtitle editor"/]
+
+    media -->|audio track| p1
+    media -->|video frames| p2
+    p1 -->|16 kHz WAV| p3
+    p1 -->|envelope| d2
+    p3 -->|timed words| p4
+    p2 -->|cut times| p4
+    d3 -->|limits, weights| p4
+    p4 -->|cues| p5
+    d3 -->|limits| p5
+    p5 -->|cues, violations| editor
+    d2 -.->|envelope| editor

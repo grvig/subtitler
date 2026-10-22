@@ -1,0 +1,30 @@
+sequenceDiagram
+    actor U as Editor
+    participant T as CueTable
+    participant W as MainWindow
+    participant C as CommandStack
+    participant R as RealignJob (worker)
+    participant A as Whisper backend
+    participant S as Segmenter
+
+    U->>T: edit cue text
+    T-->>W: text_edited(row, text)
+    W->>C: execute(EditTextCommand)
+    C->>C: new text, cue locked
+    U->>W: Realign Edited Cues
+    W->>R: start with changed cues
+    loop each changed cue
+        R->>A: transcribe cue audio, text as prompt
+        A-->>R: heard words
+        R->>R: align corrected words to heard words
+    end
+    R-->>W: finished(new word timings)
+    W->>C: execute(RealignCommand)
+    C->>C: words replaced, cue unlocked
+    U->>W: Re-segment
+    W->>C: execute(ResegmentCommand)
+    C->>S: segment(all words, cuts, locked cues)
+    S-->>C: new cues keeping the corrections
+    U->>W: Undo
+    W->>C: undo()
+    C-->>W: previous cues restored

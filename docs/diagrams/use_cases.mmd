@@ -1,0 +1,41 @@
+flowchart TB
+    editor["«actor»<br/>Subtitle editor"]
+
+    subgraph system["Subtitler"]
+        subgraph produce["Producing subtitles"]
+            uc1(["Open media or project"])
+            uc2(["Transcribe media"])
+            uc3(["Detect shot changes"])
+            uc12(["Batch transcribe a folder"])
+        end
+        subgraph correct["Correcting subtitles"]
+            uc4(["Review rule warnings"])
+            uc5(["Edit cue text"])
+            uc6(["Adjust cue timing"])
+            uc7(["Split or merge cues"])
+            uc8(["Realign edited cues"])
+            uc9(["Re-segment"])
+            uc10(["Undo or redo"])
+        end
+        subgraph keep["Keeping results"]
+            uc11(["Export SRT or WebVTT"])
+            uc13(["Save or recover project"])
+        end
+    end
+
+    asr["«actor»<br/>Speech recogniser"]
+    detector["«actor»<br/>Shot detector"]
+
+    %% invisible links keep each group in one column
+    uc1 ~~~ uc2 ~~~ uc3 ~~~ uc12
+    uc4 ~~~ uc5 ~~~ uc6 ~~~ uc7 ~~~ uc8 ~~~ uc9 ~~~ uc10
+    uc11 ~~~ uc13
+
+    editor --- produce
+    editor --- correct
+    editor --- keep
+    uc2 --- asr
+    uc8 --- asr
+    uc12 --- asr
+    uc3 --- detector
+    uc12 --- detector

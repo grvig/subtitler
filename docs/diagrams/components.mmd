@@ -1,0 +1,55 @@
+flowchart TB
+    subgraph ui["«component» ui"]
+        mw["MainWindow"]
+        vp["VideoPane"]
+        wf["WaveformView"]
+        ct["CueTable"]
+        lp["LintPanel"]
+        cs["CommandStack"]
+    end
+
+    subgraph pipeline["«component» pipeline"]
+        jm["JobManager"]
+        jb["Jobs<br/>Transcription · Shots<br/>Realign · Batch"]
+        rn["run"]
+        au["audio"]
+        as["asr"]
+        sh["shots"]
+    end
+
+    subgraph core["«component» core"]
+        sg["segmentation"]
+        lb["linebreak"]
+        tx["text"]
+        rl["rules"]
+        al["alignment"]
+        md["models"]
+    end
+
+    subgraph io["«component» io"]
+        sr["srt / vtt"]
+        pr["project"]
+    end
+
+    mw --> vp
+    mw --> wf
+    mw --> ct
+    mw --> lp
+    mw --> cs
+    mw --> jm
+    jm --> jb
+    jb --> rn
+    rn --> au
+    rn --> as
+    rn --> sh
+    rn --> sg
+    rn --> rl
+    rn --> al
+    cs --> sg
+    sg --> lb
+    lb --> tx
+    rl --> tx
+    sg --> md
+    mw --> sr
+    mw --> pr
+    rn --> sr

@@ -1,0 +1,15 @@
+flowchart LR
+    editor[/"Subtitle editor"/]
+    media[/"Video or audio file"/]
+    guide[/"Style guide limits"/]
+    model[/"Speech model cache"/]
+    out[/"SRT / WebVTT files"/]
+
+    system(("0<br/>Subtitler"))
+
+    media -->|audio and frames| system
+    guide -->|line, speed and timing limits| system
+    model -->|model weights| system
+    editor -->|commands, text corrections, timing edits| system
+    system -->|cues, warnings, playback| editor
+    system -->|subtitle files| out

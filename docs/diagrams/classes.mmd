@@ -1,0 +1,78 @@
+classDiagram
+    direction LR
+    class Word {
+        text: str
+        start: float
+        end: float
+        confidence: float
+        duration() float
+    }
+    class Cue {
+        index: int
+        start: float
+        end: float
+        lines: list~str~
+        locked: bool
+        text() str
+        chars_per_second() float
+    }
+    class StyleProfile {
+        target_cps, max_cps
+        max_chars_per_line, max_lines
+        min_duration, max_duration
+        min_gap, chain_gap, linger, shot_snap
+        cost_weights: dict
+    }
+    class Violation {
+        rule_id: str
+        cue_index: int
+        severity: str
+        message: str
+        timecode: float
+    }
+    class Rule {
+        <<abstract>>
+        id: str
+        severity: str
+        check(cue, context) list~Violation~
+    }
+    class RuleEngine {
+        rules: list~Rule~
+        validate(cues, profile, shots) list~Violation~
+    }
+    class ASRBackend {
+        <<abstract>>
+        transcribe(audio, progress, cancel, prompt) list~Word~
+        is_available() bool
+    }
+    class FasterWhisperBackend
+    class FakeASRBackend
+    class Command {
+        <<abstract>>
+        do()
+        undo()
+    }
+    class CommandStack {
+        execute(command)
+        undo() bool
+        redo() bool
+    }
+
+    Cue "1" o-- "*" Word : words
+    RuleEngine "1" o-- "*" Rule
+    Rule ..> Violation : creates
+    Rule ..> StyleProfile : reads
+    ASRBackend <|-- FasterWhisperBackend
+    ASRBackend <|-- FakeASRBackend
+    ASRBackend ..> Word : produces
+    CommandStack "1" o-- "*" Command
+    Command <|-- EditTextCommand
+    Command <|-- SetTimingCommand
+    Command <|-- SplitCueCommand
+    Command <|-- MergeCuesCommand
+    Command <|-- RealignCommand
+    Command <|-- ResegmentCommand
+    Rule <|-- ReadingSpeedRule
+    Rule <|-- MaxLineLengthRule
+    Rule <|-- BreakQualityRule
+    Rule <|-- ShotCrossingRule

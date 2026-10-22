@@ -1,0 +1,29 @@
+sequenceDiagram
+    actor U as Editor
+    participant W as MainWindow (GUI thread)
+    participant M as JobManager
+    participant J as TranscriptionJob (worker thread)
+    participant F as ffmpeg
+    participant A as Whisper backend
+    participant S as Segmenter and rules
+
+    U->>W: Transcribe
+    W->>M: start(job)
+    M-->>W: busy_changed(true)
+    M->>J: run on thread pool
+    J->>F: extract 16 kHz mono WAV
+    F-->>J: audio file
+    J-->>W: progress(15) signal
+    J->>A: transcribe(audio, progress, cancel event)
+    loop each recognised segment
+        A-->>J: timed words
+        J-->>W: progress(15..85) signal
+        J->>J: stop early if cancel event is set
+    end
+    J->>S: segment(words, shot cuts, profile)
+    S-->>J: cues
+    J->>S: validate(cues)
+    S-->>J: violations
+    J-->>W: finished(result) signal
+    W->>W: update table, waveform, problem list
+    M-->>W: busy_changed(false)
