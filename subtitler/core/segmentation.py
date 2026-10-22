@@ -42,6 +42,9 @@ from profile.cost_weights under the same name:
 The weights live on the profile so a sweep script can try different values
 with dataclasses.replace(profile, cost_weights={...}).
 
+After the partition is chosen, snap_to_shots moves cue edges onto nearby
+shot changes as the Netflix timing guide describes.
+
 Cues marked locked in existing_cues are kept exactly as they are. Their
 start and end force cue boundaries, and only the unlocked runs of words
 between them are segmented.
@@ -127,9 +130,11 @@ def cost_terms(
     if split is None:
         return None
     cps = chars_per_second(text, duration)
+    # Counted over the speech only: a cue that merely lingers past a cut is
+    # trimmed back to it by snap_to_shots, so that is no reason to avoid it.
     crossings = 0
     for boundary in shot_boundaries:
-        if start < boundary < end:
+        if start < boundary < words[j - 1].end:
             crossings += 1
     sentence_crossings = 0
     internal_pause = 0.0
@@ -224,7 +229,54 @@ def segment(
             position += 1
         pieces.append(locked_cue)
     pieces.extend(_segment_run(words[position:], boundaries, profile, math.inf))
+    snap_to_shots(pieces, boundaries, profile)
     return [replace(cue, index=number) for number, cue in enumerate(pieces, start=1)]
+
+
+def snap_to_shots(cues: list[Cue], shot_boundaries: list[float], profile: StyleProfile) -> None:
+    """Move cue edges onto nearby shot changes, following the Netflix timing
+    guide. Locked cues and cues without word timings are left alone.
+
+    Out-times: a cue whose speech ends before a cut but which lingers across
+    it is pulled back to min_gap before the cut, and a cue ending less than
+    shot_snap before a cut is extended to min_gap before it. In-times: a cue
+    whose speech starts less than shot_snap after a cut starts on the cut.
+    Nothing is moved if that would break the duration limits."""
+    for position, cue in enumerate(cues):
+        if cue.locked or not cue.words:
+            continue
+        following = None
+        if position + 1 < len(cues):
+            following = cues[position + 1]
+        speech_end = cue.words[-1].end
+        for cut in shot_boundaries:
+            before_cut = cut - profile.min_gap
+            new_end = None
+            if speech_end <= before_cut < cue.end:
+                new_end = before_cut
+            elif cue.end < before_cut < cue.end + profile.shot_snap:
+                if following is None or following.start >= cut:
+                    new_end = before_cut
+            if new_end is not None and _duration_ok(cue.start, new_end, profile):
+                cue.end = new_end
+    for position, cue in enumerate(cues):
+        if cue.locked or not cue.words:
+            continue
+        previous_end = -math.inf
+        if position > 0:
+            previous_end = cues[position - 1].end
+        for cut in shot_boundaries:
+            close_after = cut <= cue.start < cut + profile.shot_snap
+            room = previous_end <= cut - profile.min_gap + TIME_EPSILON
+            if close_after and room and _duration_ok(cut, cue.end, profile):
+                cue.start = cut
+
+
+def _duration_ok(start: float, end: float, profile: StyleProfile) -> bool:
+    duration = end - start
+    low = profile.min_duration - TIME_EPSILON
+    high = profile.max_duration + TIME_EPSILON
+    return low <= duration <= high
 
 
 def _midpoint(word: Word) -> float:

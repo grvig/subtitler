@@ -105,3 +105,13 @@ def test_split_and_merge_shortcuts(qtbot, window):
     win.merge_with_next()
     assert len(win.project.cues) == count
     assert win.project.cues[0].text() == first.text()
+
+
+def test_detect_shots_updates_project(qtbot, window, monkeypatch):
+    win = window
+    monkeypatch.setattr(jobs, "detect_shots", lambda path, progress, cancel: [1.0, 5.0])
+    with qtbot.waitSignal(win.jobs.busy_changed, timeout=10000, check_params_cb=lambda b: not b):
+        win.detect_shots()
+    assert win.project.shot_boundaries == [1.0, 5.0]
+    assert win.waveform.shots == [1.0, 5.0]
+    assert win.status_label.text() == "Found 2 shot changes"

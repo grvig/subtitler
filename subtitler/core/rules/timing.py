@@ -84,3 +84,21 @@ class OverlapRule(Rule):
             overlap = cue.end - context.next.start
             return [self.violation(cue, f"Overlaps next cue by {overlap:.3f}s")]
         return []
+
+
+class ShotCrossingRule(Rule):
+    """The Netflix timing guide lets a subtitle cross a shot change only when
+    the dialogue it shows crosses it too."""
+
+    id = "shot-crossing"
+    severity = WARNING
+
+    def check(self, cue: Cue, context: RuleContext) -> list[Violation]:
+        found = []
+        for cut in context.shot_boundaries:
+            if not cue.start + TIME_EPSILON < cut < cue.end - TIME_EPSILON:
+                continue
+            speech_crosses = bool(cue.words) and cue.words[0].start < cut < cue.words[-1].end
+            if not speech_crosses:
+                found.append(self.violation(cue, f"Crosses a shot change at {cut:.2f}s"))
+        return found

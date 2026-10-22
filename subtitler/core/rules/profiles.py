@@ -7,7 +7,9 @@ Limits marked "Netflix" come from the Netflix Timed Text Style Guides
       duration per event.
   Subtitle Timing Guidelines: at least 2 frames between events; gaps should
       be either 2 frames or at least half a second; an out-time should ideally
-      sit half a second after the audio ends when no subtitle follows.
+      sit half a second after the audio ends when no subtitle follows;
+      dialogue starting within half a second after a shot change starts on
+      it, and out-times near a shot change end two frames before it.
   English (USA): 42 characters per line, up to 20 characters per second.
   Hindi: 42 characters per line, up to 22 characters per second.
   Tamil: 42 characters per line, up to 22 characters per second.
@@ -32,6 +34,7 @@ NETFLIX_MAX_DURATION = 7.0
 NETFLIX_MIN_GAP = 2 * FRAME
 NETFLIX_CHAIN_GAP = 0.5
 NETFLIX_LINGER = 0.5
+NETFLIX_SHOT_SNAP = 0.5
 
 
 def default_cost_weights() -> dict[str, float]:
@@ -62,6 +65,8 @@ class StyleProfile:
     chain_gap: float = NETFLIX_CHAIN_GAP
     # How long a cue may stay up after its last word ends.
     linger: float = NETFLIX_LINGER
+    # Cue edges this close to a shot change are moved onto it.
+    shot_snap: float = NETFLIX_SHOT_SNAP
     max_words_per_cue: int = 20
     comfortable_duration: float = 1.5
     cost_weights: dict[str, float] = field(default_factory=default_cost_weights)

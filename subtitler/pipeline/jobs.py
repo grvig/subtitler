@@ -20,6 +20,7 @@ from subtitler.core.rules.profiles import StyleProfile
 from subtitler.core.segmentation import segment
 from subtitler.pipeline.asr import ASRBackend
 from subtitler.pipeline.audio import compute_peaks, extract_audio
+from subtitler.pipeline.shots import detect_shots
 
 PEAK_BUCKETS_PER_SECOND = 100
 
@@ -129,6 +130,24 @@ class TranscriptionJob(Job):
             fallback_reason=getattr(self.backend, "fallback_reason", None),
             shot_boundaries=self.shot_boundaries,
         )
+
+
+class ShotDetectionJob(Job):
+    """Finds shot changes in the video. The result is a list of times."""
+
+    def __init__(self, media_path):
+        super().__init__()
+        self.media_path = media_path
+
+    def execute(self) -> list[float]:
+        self.signals.status.emit("Detecting shot changes")
+        self.signals.progress.emit(0)
+        cuts = detect_shots(
+            self.media_path, lambda p: self.signals.progress.emit(int(p)), self.cancel_event
+        )
+        self.check_cancelled()
+        self.signals.progress.emit(100)
+        return cuts
 
 
 class JobManager(QObject):

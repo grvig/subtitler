@@ -30,6 +30,7 @@ class WaveformView(QWidget):
         self.peaks_max = np.zeros(0, dtype=np.float32)
         self.buckets_per_second = 100
         self.cues = []
+        self.shots = []
         self.selected = -1
         self.playhead = 0.0
         self.view_start = 0.0
@@ -45,6 +46,10 @@ class WaveformView(QWidget):
 
     def set_cues(self, cues: list[Cue]) -> None:
         self.cues = cues
+        self.update()
+
+    def set_shots(self, shots: list[float]) -> None:
+        self.shots = shots
         self.update()
 
     def set_selected(self, position: int) -> None:
@@ -110,6 +115,12 @@ class WaveformView(QWidget):
                     painter.drawLine(
                         QPointF(x, middle - high * middle), QPointF(x, middle - low * middle)
                     )
+
+        painter.setPen(QPen(QColor(230, 230, 230, 170), 1, Qt.PenStyle.DashLine))
+        for cut in self.shots:
+            x = self.x_at(cut)
+            if 0 <= x <= width:
+                painter.drawLine(QPointF(x, 0), QPointF(x, height))
 
         playhead_x = self.x_at(self.playhead)
         painter.setPen(QPen(QColor(255, 80, 80), 2))

@@ -30,7 +30,7 @@ from subtitler.io.srt import read_srt, write_srt
 from subtitler.io.vtt import write_vtt
 from subtitler.pipeline.asr import FakeASRBackend, FasterWhisperBackend
 from subtitler.pipeline.audio import ffmpeg_available
-from subtitler.pipeline.jobs import JobManager, TranscriptionJob
+from subtitler.pipeline.jobs import JobManager, ShotDetectionJob, TranscriptionJob
 from subtitler.ui.commands import (
     CommandStack,
     EditTextCommand,
@@ -121,6 +121,7 @@ class MainWindow(QMainWindow):
         self.export_vtt_action = self._action("Export VTT...", self.export_vtt)
         self.transcribe_action = self._action("Transcribe", self.transcribe, "Ctrl+T")
         self.resegment_action = self._action("Re-segment", self.resegment, "Ctrl+R")
+        self.shots_action = self._action("Detect Shot Changes", self.detect_shots, "Ctrl+D")
         self.undo_action = self._action("Undo", self.undo, "Ctrl+Z")
         self.redo_action = self._action("Redo", self.redo, "Ctrl+Y")
         self.split_action = self._action("Split at Playhead", self.split_at_playhead, "Ctrl+Return")
@@ -153,6 +154,7 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.out_action)
         tools_menu = menus.addMenu("&Subtitles")
         tools_menu.addAction(self.transcribe_action)
+        tools_menu.addAction(self.shots_action)
         tools_menu.addAction(self.resegment_action)
         playback_menu = menus.addMenu("&Playback")
         playback_menu.addAction(self.play_action)
@@ -164,6 +166,7 @@ class MainWindow(QMainWindow):
             self.open_action,
             self.import_action,
             self.transcribe_action,
+            self.shots_action,
             self.resegment_action,
             self.export_srt_action,
             self.export_vtt_action,
@@ -217,6 +220,7 @@ class MainWindow(QMainWindow):
         self.table.select_cue(selected)
         self.waveform.set_selected(selected)
         self.waveform.set_cues(cues)
+        self.waveform.set_shots(self.project.shot_boundaries)
         self.video.set_cues(cues)
         self.lint.set_violations(self.violations)
         busy = self.jobs.is_busy()
@@ -224,6 +228,7 @@ class MainWindow(QMainWindow):
         self.undo_action.setEnabled(self.stack.can_undo() and not busy)
         self.redo_action.setEnabled(self.stack.can_redo() and not busy)
         self.transcribe_action.setEnabled(has_media and not busy and ffmpeg_available())
+        self.shots_action.setEnabled(has_media and not busy)
         self.resegment_action.setEnabled(bool(cues) and not busy)
         for action in [self.export_srt_action, self.export_vtt_action, self.save_action]:
             action.setEnabled(bool(cues))
@@ -380,13 +385,30 @@ class MainWindow(QMainWindow):
         job = TranscriptionJob(
             self.project.media_path, self._backend(), self.profile, self.project.shot_boundaries
         )
+        self._start_job(job, self._on_transcribed)
+
+    def _start_job(self, job, on_finished) -> None:
         job.signals.progress.connect(self.progress.setValue)
         job.signals.status.connect(self.status_label.setText)
-        job.signals.finished.connect(self._on_transcribed)
+        job.signals.finished.connect(on_finished)
         job.signals.failed.connect(self._on_job_failed)
         job.signals.cancelled.connect(self._on_job_cancelled)
         self.progress.setValue(0)
         self.jobs.start(job)
+
+    def detect_shots(self) -> None:
+        if self.project.media_path is None or self.jobs.is_busy():
+            return
+        self._start_job(ShotDetectionJob(self.project.media_path), self._on_shots)
+
+    def _on_shots(self, cuts: list[float]) -> None:
+        self.project.shot_boundaries = cuts
+        self.project.dirty = True
+        message = f"Found {len(cuts)} shot changes"
+        if self.project.cues:
+            message = f"{message}. Re-segment to fit the cues to them."
+        self.status_label.setText(message)
+        self.refresh()
 
     def _confirm_replace(self) -> bool:
         answer = QMessageBox.question(
@@ -424,7 +446,7 @@ class MainWindow(QMainWindow):
 
     def _on_job_failed(self, message: str) -> None:
         self.status_label.setText("Failed")
-        QMessageBox.critical(self, "Transcription failed", message)
+        QMessageBox.critical(self, "Job failed", message)
 
     def _on_job_cancelled(self) -> None:
         self.status_label.setText("Cancelled")
