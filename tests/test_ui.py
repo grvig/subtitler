@@ -101,6 +101,14 @@ def test_full_editing_flow(qtbot, window, tmp_path, monkeypatch):
     assert [cue.lines for cue in exported] == [cue.lines for cue in win.project.cues]
 
 
+def test_cancel_after_the_job_ended_changes_nothing(qtbot, window):
+    win = window
+    transcribe(qtbot, win)
+    status = win.status_label.text()
+    win.cancel_job()
+    assert win.status_label.text() == status
+
+
 def test_split_and_merge_shortcuts(qtbot, window):
     win = window
     transcribe(qtbot, win)

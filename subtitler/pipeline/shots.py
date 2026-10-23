@@ -2,10 +2,14 @@
 
 import threading
 from collections.abc import Callable
+from pathlib import Path
 
 # Seconds of video handed to the detector at a time, so progress can be
 # reported and a cancel request noticed between chunks.
 CHUNK_SECONDS = 10.0
+
+# Files with no picture, skipped without asking OpenCV to open them.
+AUDIO_EXTENSIONS = {".mp3", ".wav", ".m4a", ".flac", ".ogg"}
 
 
 def detect_shots(
@@ -19,6 +23,8 @@ def detect_shots(
     from scenedetect import ContentDetector, SceneManager, open_video
     from scenedetect.video_stream import VideoOpenFailure
 
+    if Path(media_path).suffix.lower() in AUDIO_EXTENSIONS:
+        return []
     try:
         video = open_video(str(media_path))
     except (VideoOpenFailure, OSError):

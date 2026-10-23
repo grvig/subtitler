@@ -23,7 +23,7 @@ from subtitler.io.srt import write_srt
 from subtitler.io.vtt import write_vtt
 from subtitler.pipeline.asr import ASRBackend
 from subtitler.pipeline.audio import compute_peaks, extract_audio
-from subtitler.pipeline.shots import detect_shots
+from subtitler.pipeline.shots import AUDIO_EXTENSIONS, detect_shots
 from subtitler.pipeline.speakers import SpeakerEmbedder, label_speakers
 
 PEAK_BUCKETS_PER_SECOND = 100
@@ -36,9 +36,8 @@ EXTRACTION_SHARE = 15
 ASR_SHARE = 70
 SHOT_SHARE = 15
 
-MEDIA_EXTENSIONS = {
-    ".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v", ".mp3", ".wav", ".m4a", ".flac", ".ogg",
-}  # fmt: skip
+VIDEO_EXTENSIONS = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".m4v"}
+MEDIA_EXTENSIONS = VIDEO_EXTENSIONS | AUDIO_EXTENSIONS
 WRITERS = {"srt": write_srt, "vtt": write_vtt}
 
 Progress = Callable[[int], None] | None

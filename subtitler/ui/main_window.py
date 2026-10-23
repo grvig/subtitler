@@ -524,6 +524,9 @@ class MainWindow(QMainWindow):
         return answer == QMessageBox.StandardButton.Yes
 
     def cancel_job(self) -> None:
+        # The job may have finished just before the click reached us.
+        if not self.jobs.is_busy():
+            return
         self.cancel_button.setEnabled(False)
         self.status_label.setText("Cancelling...")
         self.jobs.cancel()

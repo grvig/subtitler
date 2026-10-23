@@ -87,3 +87,11 @@ def test_shot_crossing_rule():
     assert rule.check(spoken_across, context) == []
     assert len(rule.check(lingers_across, context)) == 1
     assert len(rule.check(no_words, context)) == 1
+
+
+def test_audio_file_is_not_opened(tmp_path, monkeypatch):
+    def refuse(path):
+        raise AssertionError("audio files should not be opened as video")
+
+    monkeypatch.setattr("scenedetect.open_video", refuse)
+    assert detect_shots(tmp_path / "speech.wav") == []
