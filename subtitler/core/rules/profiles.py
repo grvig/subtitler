@@ -47,6 +47,7 @@ def default_cost_weights() -> dict[str, float]:
         "short_penalty": 5.0,
         "sentence_crossings": 20.0,
         "internal_pause": 20.0,
+        "speaker_changes": 30.0,
     }
 
 

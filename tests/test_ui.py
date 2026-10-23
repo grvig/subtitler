@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QMessageBox
 from subtitler.core.models import Word
 from subtitler.io.srt import read_srt
 from subtitler.pipeline import jobs, run
+from subtitler.ui.cue_table import TEXT_COLUMN
 from subtitler.ui.main_window import MainWindow
 from tests.test_pipeline import write_tone
 
@@ -69,7 +70,7 @@ def test_full_editing_flow(qtbot, window, tmp_path, monkeypatch):
 
     # Edit a cue's text through the table model.
     model = win.table.cue_model
-    model.setData(model.index(1, 5), "A hand edited | subtitle line")
+    model.setData(model.index(1, TEXT_COLUMN), "A hand edited | subtitle line")
     qtbot.waitUntil(lambda: win.project.cues[1].locked)
     edited = copy.deepcopy(win.project.cues[1])
     assert edited.lines == ["A hand edited", "subtitle line"]
@@ -128,7 +129,7 @@ def test_realign_keeps_corrections_through_resegment(qtbot, window, monkeypatch)
     win = window
     transcribe(qtbot, win)
     model = win.table.cue_model
-    model.setData(model.index(0, 5), "Good evening and welcome to our programme.")
+    model.setData(model.index(0, TEXT_COLUMN), "Good evening and welcome to our programme.")
     qtbot.waitUntil(lambda: win.project.cues[0].locked)
 
     # The recogniser hears the original words on the cue's audio slice.
@@ -147,3 +148,22 @@ def test_realign_keeps_corrections_through_resegment(qtbot, window, monkeypatch)
     win.resegment()
     texts = " ".join(cue.text() for cue in win.project.cues)
     assert "welcome to our programme." in texts
+
+
+def test_label_speakers_action(qtbot, window, monkeypatch):
+    win = window
+    transcribe(qtbot, win)
+
+    def fake_label(media_path, words, embedder, progress, status, cancel_event):
+        return ["Speaker 1"] * (len(words) // 2) + ["Speaker 2"] * (len(words) - len(words) // 2)
+
+    monkeypatch.setattr(run, "label_media_speakers", fake_label)
+    with qtbot.waitSignal(win.jobs.busy_changed, timeout=10000, check_params_cb=lambda b: not b):
+        win.label_speakers()
+    speakers = {w.speaker for cue in win.project.cues for w in cue.words}
+    assert speakers == {"Speaker 1", "Speaker 2"}
+    model = win.table.cue_model
+    assert model.data(model.index(0, TEXT_COLUMN - 1)) == "Speaker 1"
+    assert win.status_label.text().startswith("Found 2 speakers")
+    win.undo()
+    assert {w.speaker for cue in win.project.cues for w in cue.words} == {None}

@@ -63,3 +63,21 @@ class BreakQualityRule(Rule):
                 message = f'Line {number} ends on "{word}", which binds to the next line'
                 found.append(self.violation(cue, message))
         return found
+
+
+class SpeakerChangeRule(Rule):
+    """A cue whose words come from more than one speaker. Style guides allow
+    this only with each speaker's line marked by a dash."""
+
+    id = "speaker-change"
+    severity = INFO
+
+    def check(self, cue: Cue, context: RuleContext) -> list[Violation]:
+        speakers = []
+        for word in cue.words:
+            if word.speaker and word.speaker not in speakers:
+                speakers.append(word.speaker)
+        if len(speakers) > 1:
+            names = " and ".join(speakers)
+            return [self.violation(cue, f"{names} share this cue; split it or mark each line")]
+        return []

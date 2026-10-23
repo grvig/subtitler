@@ -2,7 +2,7 @@
 
     python -m subtitler.batch FOLDER [--profile english] [--model small]
                               [--vad on|lenient|off] [--format srt vtt]
-                              [--out DIR] [--shots]
+                              [--out DIR] [--shots] [--speakers]
                               [--recursive] [--overwrite] [--fake-asr]
 
 Subtitles are written beside each media file (or into --out) with the same
@@ -28,6 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--format", nargs="+", choices=list(WRITERS), default=["srt"])
     parser.add_argument("--out", help="folder for the subtitle files")
     parser.add_argument("--shots", action="store_true", help="detect shot changes too")
+    parser.add_argument("--speakers", action="store_true", help="label speakers too")
     parser.add_argument("--recursive", action="store_true", help="include subfolders")
     parser.add_argument("--overwrite", action="store_true", help="redo files already done")
     parser.add_argument("--fake-asr", action="store_true", help="canned words, for testing")
@@ -53,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
         out_dir=args.out,
         formats=tuple(args.format),
         find_shots=args.shots,
+        find_speakers=args.speakers,
         overwrite=args.overwrite,
         status=lambda message: print(message, flush=True),
     )

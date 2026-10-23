@@ -5,6 +5,7 @@ from subtitler.core.rules.layout import (
     MaxLineCountRule,
     MaxLineLengthRule,
     OrphanLineRule,
+    SpeakerChangeRule,
 )
 from subtitler.core.rules.profiles import StyleProfile
 from subtitler.core.rules.timing import (
@@ -30,6 +31,7 @@ DEFAULT_RULES = [
     MaxLineCountRule,
     OrphanLineRule,
     BreakQualityRule,
+    SpeakerChangeRule,
 ]
 
 

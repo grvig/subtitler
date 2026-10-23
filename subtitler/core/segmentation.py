@@ -38,6 +38,8 @@ from profile.cost_weights under the same name:
   internal_pause    total seconds of silence between words inside the
                     span, counting only the part of each gap above
                     PAUSE_THRESHOLD
+  speaker_changes   number of times the speaker label changes inside the
+                    span, when words carry speaker labels
 
 The weights live on the profile so a sweep script can try different values
 with dataclasses.replace(profile, cost_weights={...}).
@@ -149,9 +151,12 @@ def cost_terms(
             crossings += 1
     sentence_crossings = 0
     internal_pause = 0.0
+    speaker_changes = 0
     for k in range(i, j - 1):
         if boundary_penalty(words[k].text) == BOUNDARY_SENTENCE_END:
             sentence_crossings += 1
+        if words[k].speaker and words[k + 1].speaker and words[k].speaker != words[k + 1].speaker:
+            speaker_changes += 1
         pause = words[k + 1].start - words[k].end
         internal_pause += max(0.0, pause - PAUSE_THRESHOLD)
     return {
@@ -162,6 +167,7 @@ def cost_terms(
         "short_penalty": max(0.0, profile.comfortable_duration - duration),
         "sentence_crossings": float(sentence_crossings),
         "internal_pause": internal_pause,
+        "speaker_changes": float(speaker_changes),
     }
 
 

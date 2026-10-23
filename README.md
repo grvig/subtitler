@@ -35,10 +35,9 @@ Working:
   and realign
 - realigning corrected text to the audio, so corrections survive re-segmenting
 - batch transcription of a folder, from the menu or the command line
+- speaker labels, with cues split where the speaker changes
 - SRT import and export, WebVTT export, project files with autosave
 - a packaged Windows build
-
-Not done: speaker labels.
 
 ### Where the limits come from
 
@@ -126,7 +125,7 @@ music Whisper may then write text that nobody said; see `docs/evaluation.md`.
 an `.srt` beside each one. The same from a terminal, with more options:
 
 ```bash
-python -m subtitler.batch path\to\folder --profile english --shots --format srt vtt
+python -m subtitler.batch path\to\folder --profile english --shots --speakers --format srt vtt
 ```
 
 Files that already have subtitles are skipped unless `--overwrite` is given.
@@ -142,6 +141,7 @@ Files that already have subtitles are skipped unless `--overwrite` is given.
 | Ctrl+Z / Ctrl+Y | undo / redo |
 | Ctrl+D | detect shot changes |
 | Ctrl+L | realign edited cues |
+| Ctrl+K | label speakers |
 | Ctrl+R | re-segment |
 | Ctrl+E | export SRT |
 
@@ -154,6 +154,12 @@ Files that already have subtitles are skipped unless `--overwrite` is given.
   word timings to imported subtitles, so they can be re-segmented too.
 - **Detect Shot Changes** marks the cuts on the waveform as dashed lines.
   Re-segment afterwards to fit the cues to them.
+- **Label Speakers** works out who is speaking and shows it in the Speaker
+  column. Re-segment afterwards and cues are split where the speaker
+  changes; a cue that still holds two speakers is flagged. It needs no
+  account or token. Speech is grouped into turns at pauses, so it works best
+  on clear turn-taking such as interviews; with heavy music and effects, as in
+  film soundtracks, it tends to report too many speakers.
 - Drag the edge of a cue in the waveform to change its timing. Click
   elsewhere in the waveform to seek, and scroll to zoom.
 - Double-click a problem in the list on the right to jump to that cue.
@@ -183,6 +189,15 @@ subtitles. The second scores the reference subtitles, a greedy baseline and
 the optimiser, and tries random cost weights. Results and method are in
 `docs/evaluation.md`.
 
+## Models used
+
+- Speech recognition: OpenAI Whisper, through faster-whisper, downloaded on
+  first use.
+- Speaker labels: the WeSpeaker ResNet34 model trained on VoxCeleb
+  ([Wespeaker/wespeaker-voxceleb-resnet34-LM](https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet34-LM),
+  CC BY 4.0), from the WeSpeaker toolkit by Wang et al., run with
+  onnxruntime. About 27 MB, downloaded on first use.
+
 ## Project layout
 
 ```
@@ -190,8 +205,8 @@ subtitler/
   core/       models, text measurement, line breaking, segmentation,
               realignment, rules
   io/         SRT, WebVTT and project files
-  pipeline/   audio extraction, speech recognition, shot detection, the
-              processing steps (run.py) and their background jobs
+  pipeline/   audio extraction, speech recognition, shot detection, speaker
+              labels, the processing steps (run.py) and their background jobs
   ui/         Qt widgets and undoable commands
   eval/       evaluation metrics, greedy baseline, evaluation runner
   app.py      editor entry point

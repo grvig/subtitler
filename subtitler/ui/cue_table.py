@@ -9,8 +9,8 @@ from subtitler.core.models import Cue
 from subtitler.core.rules.profiles import StyleProfile
 from subtitler.io.srt import format_timestamp
 
-COLUMNS = ["#", "Start", "End", "Duration", "CPS", "Text"]
-TEXT_COLUMN = 5
+COLUMNS = ["#", "Start", "End", "Duration", "CPS", "Speaker", "Text"]
+TEXT_COLUMN = 6
 CPS_COLUMN = 4
 # Lines are shown on one row separated by this, and split on it again after editing.
 LINE_SEPARATOR = " | "
@@ -18,6 +18,15 @@ LINE_SEPARATOR = " | "
 CPS_GOOD = QColor(60, 150, 80, 90)
 CPS_HIGH = QColor(220, 170, 40, 110)
 CPS_TOO_HIGH = QColor(210, 60, 60, 120)
+
+
+def cue_speakers(cue: Cue) -> str:
+    """The speakers of a cue's words, in order, such as "Speaker 1"."""
+    names = []
+    for word in cue.words:
+        if word.speaker and word.speaker not in names:
+            names.append(word.speaker)
+    return ", ".join(names)
 
 
 class CueTableModel(QAbstractTableModel):
@@ -57,6 +66,7 @@ class CueTableModel(QAbstractTableModel):
                 format_timestamp(cue.end, "."),
                 f"{cue.duration():.2f}",
                 f"{cue.chars_per_second():.1f}",
+                cue_speakers(cue),
                 LINE_SEPARATOR.join(cue.lines),
             ]
             return values[column]

@@ -16,6 +16,7 @@ from subtitler.core.rules.profiles import StyleProfile
 from subtitler.pipeline import run
 from subtitler.pipeline.asr import ASRBackend
 from subtitler.pipeline.shots import detect_shots
+from subtitler.pipeline.speakers import SpeakerEmbedder
 
 
 class JobSignals(QObject):
@@ -108,6 +109,19 @@ class RealignJob(Job):
 
     def execute(self):
         return run.realign_cues(self.media_path, self.backend, self.cues, **self._hooks())
+
+
+class SpeakerJob(Job):
+    """Labels the speaker of every word; see run.label_media_speakers."""
+
+    def __init__(self, media_path, words, embedder: SpeakerEmbedder):
+        super().__init__()
+        self.media_path = media_path
+        self.words = words
+        self.embedder = embedder
+
+    def execute(self) -> list[str]:
+        return run.label_media_speakers(self.media_path, self.words, self.embedder, **self._hooks())
 
 
 class BatchJob(Job):

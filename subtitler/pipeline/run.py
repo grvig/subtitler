@@ -24,6 +24,7 @@ from subtitler.io.vtt import write_vtt
 from subtitler.pipeline.asr import ASRBackend
 from subtitler.pipeline.audio import compute_peaks, extract_audio
 from subtitler.pipeline.shots import detect_shots
+from subtitler.pipeline.speakers import SpeakerEmbedder, label_speakers
 
 PEAK_BUCKETS_PER_SECOND = 100
 # Audio taken on each side of a cue when it is transcribed again on its own.
@@ -80,9 +81,11 @@ def transcribe_media(
     progress: Progress = None,
     status: Status = None,
     cancel_event: threading.Event | None = None,
+    find_speakers: bool = False,
+    embedder: SpeakerEmbedder | None = None,
 ) -> TranscriptionResult:
     """Extract the audio, optionally find shot changes, recognise speech,
-    segment it into cues and check them."""
+    optionally label speakers, segment the words into cues and check them."""
     shots = list(shot_boundaries or [])
     shot_share = 0
     if find_shots:
@@ -112,6 +115,9 @@ def transcribe_media(
             cancel_event,
         )
         _check(cancel_event)
+        if find_speakers:
+            _report(status, "Labelling speakers")
+            _apply_speakers(words, wav_path, embedder, cancel_event)
     _report(status, "Segmenting")
     _report(progress, asr_start + asr_share)
     cues = segment(words, shots, profile)
@@ -129,6 +135,36 @@ def transcribe_media(
         fallback_reason=getattr(backend, "fallback_reason", None),
         shot_boundaries=shots,
     )
+
+
+def _apply_speakers(words, wav_path, embedder, cancel_event) -> None:
+    if embedder is None:
+        embedder = SpeakerEmbedder()
+    labels = label_speakers(words, wav_path, embedder, None, cancel_event)
+    _check(cancel_event)
+    for word, label in zip(words, labels, strict=True):
+        word.speaker = label
+
+
+def label_media_speakers(
+    media_path,
+    words: list[Word],
+    embedder: SpeakerEmbedder,
+    progress: Progress = None,
+    status: Status = None,
+    cancel_event: threading.Event | None = None,
+) -> list[str]:
+    """A speaker label for each of words, from the media file's audio."""
+    with tempfile.TemporaryDirectory(prefix="subtitler-") as work_dir:
+        wav_path = Path(work_dir) / "audio.wav"
+        _report(status, "Extracting audio")
+        extract_audio(media_path, wav_path)
+        _check(cancel_event)
+        _report(status, "Labelling speakers")
+        labels = label_speakers(words, wav_path, embedder, progress, cancel_event)
+    _check(cancel_event)
+    _report(status, "Done")
+    return labels
 
 
 def realign_cues(
@@ -196,6 +232,7 @@ def batch_transcribe(
     out_dir=None,
     formats: tuple[str, ...] = ("srt",),
     find_shots: bool = False,
+    find_speakers: bool = False,
     overwrite: bool = False,
     progress: Progress = None,
     status: Status = None,
@@ -203,6 +240,9 @@ def batch_transcribe(
 ) -> list[BatchItem]:
     """Transcribe each file and write its subtitles. A file that fails is
     recorded and the batch carries on with the next one."""
+    embedder = None
+    if find_speakers:
+        embedder = SpeakerEmbedder()
     if out_dir is not None:
         Path(out_dir).mkdir(parents=True, exist_ok=True)
     items = []
@@ -225,6 +265,8 @@ def batch_transcribe(
                 find_shots=find_shots,
                 progress=file_progress,
                 cancel_event=cancel_event,
+                find_speakers=find_speakers,
+                embedder=embedder,
             )
         except Cancelled:
             raise

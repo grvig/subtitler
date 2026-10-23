@@ -185,6 +185,28 @@ class RealignCommand(Command):
             cue.locked = old_locked
 
 
+class LabelSpeakersCommand(Command):
+    """Set the speaker of every word, given labels in reading order."""
+
+    description = "Label speakers"
+
+    def __init__(self, project: Project, labels: list[str]):
+        self.words = [word for cue in project.cues for word in cue.words]
+        if len(labels) != len(self.words):
+            raise ValueError("The cues changed while speakers were being labelled")
+        self.project = project
+        self.old = [word.speaker for word in self.words]
+        self.new = list(labels)
+
+    def do(self) -> None:
+        for word, label in zip(self.words, self.new, strict=True):
+            word.speaker = label
+
+    def undo(self) -> None:
+        for word, label in zip(self.words, self.old, strict=True):
+            word.speaker = label
+
+
 class ResegmentCommand(Command):
     """Run the segmenter again over all words, keeping locked cues as they are."""
 

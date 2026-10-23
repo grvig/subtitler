@@ -37,12 +37,15 @@ from subtitler.pipeline.jobs import (
     JobManager,
     RealignJob,
     ShotDetectionJob,
+    SpeakerJob,
     TranscriptionJob,
 )
 from subtitler.pipeline.run import find_media
+from subtitler.pipeline.speakers import SpeakerEmbedder
 from subtitler.ui.commands import (
     CommandStack,
     EditTextCommand,
+    LabelSpeakersCommand,
     MergeCuesCommand,
     RealignCommand,
     ResegmentCommand,
@@ -70,6 +73,7 @@ class MainWindow(QMainWindow):
         self.profile = ENGLISH
         self.use_fake_asr = use_fake_asr
         self.backends = {}
+        self.embedder = SpeakerEmbedder()
         self.violations = []
         self.stack = CommandStack()
         self.stack.listeners.append(self.refresh)
@@ -134,6 +138,7 @@ class MainWindow(QMainWindow):
         self.resegment_action = self._action("Re-segment", self.resegment, "Ctrl+R")
         self.shots_action = self._action("Detect Shot Changes", self.detect_shots, "Ctrl+D")
         self.realign_action = self._action("Realign Edited Cues", self.realign, "Ctrl+L")
+        self.speakers_action = self._action("Label Speakers", self.label_speakers, "Ctrl+K")
         self.undo_action = self._action("Undo", self.undo, "Ctrl+Z")
         self.redo_action = self._action("Redo", self.redo, "Ctrl+Y")
         self.split_action = self._action("Split at Playhead", self.split_at_playhead, "Ctrl+Return")
@@ -170,6 +175,7 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(self.transcribe_action)
         tools_menu.addAction(self.shots_action)
         tools_menu.addAction(self.realign_action)
+        tools_menu.addAction(self.speakers_action)
         tools_menu.addAction(self.resegment_action)
         playback_menu = menus.addMenu("&Playback")
         playback_menu.addAction(self.play_action)
@@ -253,6 +259,8 @@ class MainWindow(QMainWindow):
         self.transcribe_action.setEnabled(has_media and not busy and ffmpeg_available())
         self.shots_action.setEnabled(has_media and not busy)
         self.batch_action.setEnabled(not busy and ffmpeg_available())
+        has_words = any(cue.words for cue in cues)
+        self.speakers_action.setEnabled(has_media and has_words and not busy and ffmpeg_available())
         self.realign_action.setEnabled(has_media and bool(cues) and not busy and ffmpeg_available())
         self.resegment_action.setEnabled(bool(cues) and not busy)
         for action in [self.export_srt_action, self.export_vtt_action, self.save_action]:
@@ -487,6 +495,27 @@ class MainWindow(QMainWindow):
             lines.append(f"{item.media_path.name}: {item.error}")
         self.status_label.setText(lines[0])
         QMessageBox.information(self, "Batch transcribe", "\n".join(lines))
+
+    def label_speakers(self) -> None:
+        if self.project.media_path is None or self.jobs.is_busy():
+            return
+        words = [word for cue in self.project.cues for word in cue.words]
+        if not words:
+            return
+        job = SpeakerJob(self.project.media_path, words, self.embedder)
+        self._start_job(job, self._on_speakers)
+
+    def _on_speakers(self, labels) -> None:
+        try:
+            command = LabelSpeakersCommand(self.project, labels)
+        except ValueError as error:
+            self.status_label.setText(str(error))
+            return
+        self.stack.execute(command)
+        count = len({label for label in labels if label})
+        self.status_label.setText(
+            f"Found {count} speakers. Re-segment to split cues where the speaker changes."
+        )
 
     def _confirm_replace(self) -> bool:
         answer = QMessageBox.question(
